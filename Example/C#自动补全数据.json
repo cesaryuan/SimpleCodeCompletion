@@ -1,0 +1,74 @@
+[
+    {
+        "name": "Path",
+        "actualText": "Path",
+        "parent": "",
+        "description": "对包含文件或目录路径信息的 String 实例执行操作",
+        "completeOffset": 0,
+        "priority": 0
+    },
+    {
+        "name": "Convert",
+        "actualText": "Convert",
+        "parent": "",
+        "description": "将一个基本数据类型转换为另一个基本数据类型",
+        "completeOffset": 0,
+        "priority": 0
+    },
+    {
+        "name": "GetFileName()",
+        "actualText": "GetFileName()",
+        "parent": "Path.",
+        "description": "GetFileName(String):string    返回指定路径字符串的文件名和扩展名。",
+        "completeOffset": 1,
+        "priority": 0
+    },
+    {
+        "name": "ToInt32()",
+        "actualText": "ToInt32()",
+        "parent": "Convert.",
+        "description": "将指定的值转换为 32 位有符号整数。\nToInt32(String): int    将数字的指定字符串表示形式转换为等效的 32 位带符号整数。",
+        "completeOffset": 1,
+        "priority": 0
+    },
+    {
+        "name": "Select()",
+        "actualText": "Select( x =>  )",
+        "parent": ".",
+        "description": "",
+        "completeOffset": 2,
+        "priority": 0
+    },
+    {
+        "name": "ToString()",
+        "actualText": "ToString()",
+        "parent": ".",
+        "description": "",
+        "completeOffset": 0,
+        "priority": 0
+    },
+    {
+        "name": "Dictionary<,>",
+        "actualText": "Dictionary<string, object>",
+        "parent": "",
+        "description": "",
+        "completeOffset": 0,
+        "priority": 0
+    },
+    {
+        "name": "if",
+        "actualText": "if ()\n{\n\t\n}",
+        "parent": "",
+        "description": "",
+        "completeOffset": 7,
+        "priority": 0
+    },
+    {
+        "name": "string",
+        "actualText": "string",
+        "parent": "",
+        "description": "",
+        "completeOffset": 0,
+        "priority": 0
+    }
+]
