@@ -2,6 +2,8 @@
 using ICSharpCode.AvalonEdit.CodeCompletion;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Editing;
+using ICSharpCode.AvalonEdit.Highlighting;
+using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -10,17 +12,21 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Xml;
 
 namespace SimpleCodeCompletion
 {
     public class CodeCompletion
     {
         #region Quicker
+        public static ResourceManager rm = new ResourceManager("SimpleCodeCompletion.Resource1", Assembly.GetExecutingAssembly());
+        public static IHighlightingDefinition highlighting;
         CompletionWindow completionWindow;
         JArray QuickerVarInfo = new JArray();
         JObject QuickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
@@ -47,7 +53,10 @@ namespace SimpleCodeCompletion
             typeof(JsonConvert),
             typeof(object),
             typeof(Environment),
-            typeof(FileInfo)
+            typeof(FileInfo),
+            typeof(StringComparison),
+            typeof(StringSplitOptions),
+            typeof(RegexOptions)
         };
         Func<string, string, int> GetMatchQuality = null;
         CompletionDataComparer comparer = new CompletionDataComparer();
@@ -63,14 +72,19 @@ namespace SimpleCodeCompletion
             Dictionary<string, List<Type>> CustomVarTypeDefine = null)
         {
             this.GetMatchQuality = CustomGetMatchQualityFunc;
-            if(CustomSnippets != null)
+            if (CustomSnippets != null)
                 this.CustomSnippets = CustomSnippets;
-            if(QuickerVarInfo != null)
+            if (QuickerVarInfo != null)
                 this.QuickerVarInfo = QuickerVarInfo;
             if (CustomVarTypeDefine != null)
                 this.CustomVarTypeDefine = CustomVarTypeDefine;
             textEditor.TextArea.TextEntered += EnteredWrapper(completionWindow);
             textEditor.TextArea.TextEntering += EnteringWrapper();
+            using (StringReader sr = new StringReader(CodeCompletion.rm.GetString("DescriptionHighlight")))
+            using (XmlReader xmlReader = XmlReader.Create(sr))
+            {
+                highlighting = HighlightingLoader.Load(xmlReader, HighlightingManager.Instance);
+            }
         }
 
         private TextCompositionEventHandler EnteringWrapper()
@@ -109,7 +123,6 @@ namespace SimpleCodeCompletion
                     // 获取parent，既「.」前面的字符
 
                     var parent = GetParent(textArea);
-
                     completionWindow = new CompletionWindow(textArea);
                     completionWindow.Width = 220;
                     if (GetMatchQuality != null)
@@ -276,7 +289,7 @@ namespace SimpleCodeCompletion
                                         (DefaultValue.Length < 10000 ? "\r\n" + "默认值：" + DefaultValue : ""),
                         iconPath = "https://files.getquicker.net/_icons/VARPIC_" + QuickerVarMetaData[item["Type"].ToString()]["name"].ToString().ToUpper() + ".png",
                     };
-                    data.Add(temp);     
+                    data.Add(temp);
                 }
             }
         }
@@ -285,7 +298,7 @@ namespace SimpleCodeCompletion
         {
             foreach (var item in PredefindTypes.Where(x => x.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase)))
             {
-                var name = item.Name;
+                var name = ValueTypeHandle(item.Name);
                 var temp = new CustomCompletionData()
                 {
                     name = name,
@@ -520,7 +533,10 @@ namespace SimpleCodeCompletion
             return types;
         }
 
-        private List<CustomCompletionData> GetMethods(List<Type> types, BindingFlags flag = BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static, bool isInstance = true)
+        private List<CustomCompletionData> GetMethods(
+            List<Type> types,
+            BindingFlags flag = BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static,
+            bool isInstance = true)
         {
             var data = new List<CustomCompletionData>();
             for (int i = 0; i < types.Count; i++)
@@ -662,7 +678,7 @@ namespace SimpleCodeCompletion
             return data;
         }
 
-        private static string GetGenericTypeName(Type type)
+        private string GetGenericTypeName(Type type)
         {
             string friendlyName = type.Name;
             if (type.IsGenericType)
@@ -682,7 +698,7 @@ namespace SimpleCodeCompletion
                 friendlyName += ">";
             }
 
-            return friendlyName;
+            return ValueTypeHandle(friendlyName);
         }
 
         private static string GetToken(TextArea sender)
@@ -742,7 +758,16 @@ namespace SimpleCodeCompletion
             return null;
         }
 
-
+        private string ValueTypeHandle(string name)
+        {
+            return Regex.Replace(name, @"^(Int32|Double|String)$", (m) =>
+            {
+                return m.Value
+                        .Replace("Int32", "int")
+                        .Replace("Double", "double")
+                        .Replace("String", "string");
+            });
+        }
 
         class CompletionDataComparer : IEqualityComparer<MethodInfo>
         {
@@ -816,15 +841,23 @@ namespace SimpleCodeCompletion
         // Use this property if you want to show a fancy UIElement in the drop down list.
         public object Content
         {
-            get { return this.Text; }
+            get
+            {
+                return Text;
+            }
         }
 
         public object Description
         {
-            get { return description; }
+            get {
+                var control = new DescriptionControl();
+                control.textBox2.Text = description;
+                return control;
+                //return description;
+            }
         }
 
-        public double Priority { get { return priority; } }
+        public double Priority { get { return 1.0; } }
 
         public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
         {

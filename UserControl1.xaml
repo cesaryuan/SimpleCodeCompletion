@@ -1,0 +1,20 @@
+﻿<UserControl
+    x:Class="SimpleCodeCompletion.DescriptionControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:SimpleCodeCompletion"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <!--<TextBox x:Name="textBox" TextWrapping="Wrap" Text="TextBoxdddddddddddddddddddddddd" MaxWidth="800" FontFamily="Consolas" Background="#FFF1F2F7" BorderBrush="{x:Null}"/>-->
+    <avalonedit:TextEditor
+        x:Name="textBox2"
+        MaxWidth="800"
+        Background="#FFF1F2F7"
+        BorderBrush="{x:Null}"
+        FontFamily="Consolas"
+        HorizontalScrollBarVisibility="Disabled"
+        Text="TextBoxdddddddddddddddddddddddd"
+        VerticalScrollBarVisibility="Disabled" />
+</UserControl>

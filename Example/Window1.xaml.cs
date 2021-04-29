@@ -87,7 +87,7 @@ namespace TextWindowCodeCompletion
 
             if (win.Tag != null)
                 return;
-            win.Tag = true;
+            
             #region 注入代码
             try
             {
@@ -110,6 +110,7 @@ namespace TextWindowCodeCompletion
                                         QuickerVarInfo: JArray.FromObject(_variables),
                                         CustomVarTypeDefine: varTypeDict);
                     AppHelper.ShowSuccess("启动成功");
+                    win.Tag = true;
 
                 });
             }
@@ -118,6 +119,8 @@ namespace TextWindowCodeCompletion
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     var _variables = GetPrivateFieid<ObservableCollection<ActionVariable>>("_variables", win);
+                    if(_variables == null)
+                        _variables = (win as Quicker.View.X.ActionStepEditorWindow).Variables;
                     var _inputParamEditors = GetPrivateFieid<List<InputParamEditor2>>("_inputParamEditors", win);
                     if (_inputParamEditors == null)
                         _inputParamEditors = GetPrivateFieid<Dictionary<string, StepInputFieldControl>>("_inputFieldControls", win).Select(x =>
@@ -152,6 +155,7 @@ namespace TextWindowCodeCompletion
 
                             }
                         }
+                        win.Tag = true;
                         AppHelper.ShowSuccess("启动成功");
                     }
                 });
@@ -167,6 +171,8 @@ namespace TextWindowCodeCompletion
                         CustomSnippets: AllCompletionData,
                         CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality);
                 });
+                win.Tag = true;
+                AppHelper.ShowSuccess("启动成功");
             }
             #endregion
 

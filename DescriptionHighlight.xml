@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<SyntaxDefinition name="C#"
+        xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+	<Color name="Method" foreground="#8b531f" />
+	<Color name="Class" foreground="#2b91af" />
+	<Color name="Type" foreground="Blue" />
+	<Color name="Return" foreground="Blue" />
+	<!-- This is the main ruleset. -->
+	<RuleSet>
+		<Rule foreground="Blue">static:</Rule>
+		
+		<Rule color="Class">\w+(?&gt;&lt;(((?!&lt;|&gt;)[\w,\s])*|(?&lt;open&gt;&lt;)|(?&lt;-open&gt;&gt;))*(?(open)(?!))&gt;)?(\[\])?(?=\.)</Rule>
+		<Rule color="Method">\w+?(?=\()</Rule>
+		<Rule color="Type">\w+(?&gt;&lt;(((?!&lt;|&gt;)[\w,\s])*|(?&lt;open&gt;&lt;)|(?&lt;-open&gt;&gt;))*(?(open)(?!))&gt;)?(\[\])?\s</Rule>
+		<!--<Span>
+			<Begin>&lt;</Begin>
+			<End>&gt;</End>
+			<RuleSet>
+				<Rule color="Type">\w+</Rule>
+			</RuleSet>
+		</Span>-->
+		<Rule color="Type">(?&lt;=:\s+)\w+(?&gt;&lt;(((?!&lt;|&gt;)[\w,\s])*|(?&lt;open&gt;&lt;)|(?&lt;-open&gt;&gt;))*(?(open)(?!))&gt;)?(\[\])?</Rule>
+	</RuleSet>
+</SyntaxDefinition>
