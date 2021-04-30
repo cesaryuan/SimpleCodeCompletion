@@ -64,13 +64,32 @@ namespace TextWindowCodeCompletion
 
         #region Quicker
 
-
-        static Dictionary<string, List<Type>> varTypeDict = new Dictionary<string, List<Type>>();
-        static JObject QuickcerVarInfo = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
         public static void Exec(Quicker.Public.IStepContext context)
         {
+            EvalContext evalContext = null;
+            Dictionary<string, List<Type>> varTypeDict = new Dictionary<string, List<Type>>();
+            JObject QuickcerVarInfo = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
+
             var data = (string)context.GetVarValue("代码片段");
-            //evalContext = (EvalContext)context.GetVarValue("_evalc");
+            Func<string, Type> typeGetter = (s) =>
+            {
+                try
+                {
+                    if (evalContext == null)
+                    {
+                        evalContext = new EvalContext();
+                        evalContext.UseLocalCache = true;
+                    }
+
+                    //AppHelper.ShowInformation(typestring);
+                    var typ = evalContext.Execute<Type>("typeof(" + s + ")");
+                    return typ;
+                }
+                catch (Exception e)
+                {
+                    return null;
+                }
+            };
             var AllCompletionData = JsonConvert.DeserializeObject<List<CustomCompletionData>>(data);
 
             Window win;
@@ -87,14 +106,14 @@ namespace TextWindowCodeCompletion
 
             if (win.Tag != null)
                 return;
-            
+
             #region 注入代码
             try
             {
                 varTypeDict.Add("_eval", new List<Type>() { typeof(EvalContext) });
             }
             catch { }
-            
+
             if (type == typeof(Quicker.View.CodeEditorWindow))
             {
 
@@ -103,12 +122,14 @@ namespace TextWindowCodeCompletion
                     var textEditor = GetPrivateFieid<TextEditor>("textEditor", win);
                     var _variables = GetPrivateFieid<ICollection<ActionVariable>>("_variables", win);
                     CompletionWindow originCompletionWindow = GetPrivateFieid<CompletionWindow>("completionWindow", win);
-                    new CodeCompletion(textEditor,
-                                        completionWindow: originCompletionWindow,
-                                        CustomSnippets: AllCompletionData,
-                                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
-                                        QuickerVarInfo: JArray.FromObject(_variables),
-                                        CustomVarTypeDefine: varTypeDict);
+                    new CodeCompletion(
+                        textEditor,
+                        completionWindow: originCompletionWindow,
+                        CustomSnippets: AllCompletionData,
+                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
+                        QuickerVarInfo: JArray.FromObject(_variables),
+                        CustomVarTypeDefine: varTypeDict,
+                        TypeGetter: typeGetter);
                     AppHelper.ShowSuccess("启动成功");
                     win.Tag = true;
 
@@ -119,7 +140,7 @@ namespace TextWindowCodeCompletion
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     var _variables = GetPrivateFieid<ObservableCollection<ActionVariable>>("_variables", win);
-                    if(_variables == null)
+                    if (_variables == null)
                         _variables = (win as Quicker.View.X.ActionStepEditorWindow).Variables;
                     var _inputParamEditors = GetPrivateFieid<List<InputParamEditor2>>("_inputParamEditors", win);
                     if (_inputParamEditors == null)
@@ -143,12 +164,14 @@ namespace TextWindowCodeCompletion
                                 CompletionWindow originCompletionWindow = GetPrivateFieid<CompletionWindow>("completionWindow", paramEditor);
                                 if (textEditor != null)
                                 {
-                                    new CodeCompletion(textEditor,
-                                                        completionWindow: GetPrivateFieid<CompletionWindow>("completionWindow", paramEditor),
-                                                        CustomSnippets: AllCompletionData,
-                                                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
-                                                        QuickerVarInfo: JArray.FromObject(_variables),
-                                                        CustomVarTypeDefine: varTypeDict);
+                                    new CodeCompletion(
+                                        textEditor,
+                                        completionWindow: GetPrivateFieid<CompletionWindow>("completionWindow", paramEditor),
+                                        CustomSnippets: AllCompletionData,
+                                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
+                                        QuickerVarInfo: JArray.FromObject(_variables),
+                                        CustomVarTypeDefine: varTypeDict,
+                                        TypeGetter: typeGetter);
 
                                 }
 
@@ -166,10 +189,12 @@ namespace TextWindowCodeCompletion
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     var textEditor = GetPrivateFieid<TextEditor>("TheText", win);
-                    new CodeCompletion(textEditor,
+                    new CodeCompletion(
+                        textEditor,
                         completionWindow: null,
                         CustomSnippets: AllCompletionData,
-                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality);
+                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
+                        TypeGetter: typeGetter);
                 });
                 win.Tag = true;
                 AppHelper.ShowSuccess("启动成功");

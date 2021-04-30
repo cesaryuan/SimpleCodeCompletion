@@ -27,6 +27,7 @@ namespace SimpleCodeCompletion
         #region Quicker
         public static ResourceManager rm = new ResourceManager("SimpleCodeCompletion.Resource1", Assembly.GetExecutingAssembly());
         public static IHighlightingDefinition highlighting;
+
         CompletionWindow completionWindow;
         JArray QuickerVarInfo = new JArray();
         JObject QuickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
@@ -37,6 +38,7 @@ namespace SimpleCodeCompletion
             typeof(int),
             typeof(double),
             typeof(bool),
+            typeof(char),
             typeof(string),
             typeof(String),
             typeof(DateTime),
@@ -56,12 +58,15 @@ namespace SimpleCodeCompletion
             typeof(FileInfo),
             typeof(StringComparison),
             typeof(StringSplitOptions),
-            typeof(RegexOptions)
+            typeof(RegexOptions),
+            typeof(Assembly),
+            typeof(Type),
         };
         Func<string, string, int> GetMatchQuality = null;
         CompletionDataComparer comparer = new CompletionDataComparer();
-        List<CustomCompletionData> CustomSnippets;
+        List<CustomCompletionData> CustomSnippets = new List<CustomCompletionData>();
         Dictionary<string, List<Type>> CustomVarTypeDefine = new Dictionary<string, List<Type>>();
+        Func<string, Type> TypeGetter = null;
 
         public CodeCompletion(
             TextEditor textEditor,
@@ -69,11 +74,13 @@ namespace SimpleCodeCompletion
             Func<string, string, int> CustomGetMatchQualityFunc = null,
             JArray QuickerVarInfo = null,
             List<CustomCompletionData> CustomSnippets = null,
-            Dictionary<string, List<Type>> CustomVarTypeDefine = null)
+            Dictionary<string, List<Type>> CustomVarTypeDefine = null,
+            Func<string, Type> TypeGetter = null)
         {
+            this.CustomSnippets.AddRange(JsonConvert.DeserializeObject<List<CustomCompletionData>>(rm.GetString("Snippets")));
             this.GetMatchQuality = CustomGetMatchQualityFunc;
             if (CustomSnippets != null)
-                this.CustomSnippets = CustomSnippets;
+                this.CustomSnippets.AddRange(CustomSnippets);
             if (QuickerVarInfo != null)
                 this.QuickerVarInfo = QuickerVarInfo;
             if (CustomVarTypeDefine != null)
@@ -124,7 +131,8 @@ namespace SimpleCodeCompletion
 
                     var parent = GetParent(textArea);
                     completionWindow = new CompletionWindow(textArea);
-                    completionWindow.Width = 220;
+                    completionWindow.Width = 230;
+
                     if (GetMatchQuality != null)
                         completionWindow.CustomGetMatchQualityFunc = (itemText, query) =>
                         {
@@ -252,7 +260,20 @@ namespace SimpleCodeCompletion
                 "new",
                 "while",
                 "break",
-                "continue"
+                "throw",
+                "private",
+                "enum",
+                "delegate",
+                "default",
+                "static",
+                "false",
+                "true",
+                "struct",
+                "case",
+                "typeof",
+                "sizeof",
+                "nameof",
+                "using"
             };
             foreach (var item in keywords.Where(x => x.StartsWith(token, StringComparison.OrdinalIgnoreCase)).Select(x =>
                     new CustomCompletionData()
@@ -260,7 +281,7 @@ namespace SimpleCodeCompletion
                         name = x,
                         actualText = x,
                         priority = 20,
-                        iconPath = "https://files.getquicker.net/_icons/8ABA2D41F86BF89C2F18E2042BD20F6F10661FDE.png"
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/keywords.png"
                     }))
             {
                 if (item != null)
@@ -287,11 +308,19 @@ namespace SimpleCodeCompletion
                         replaceOffset = 0,
                         description = "介绍：" + Desc +
                                         (DefaultValue.Length < 10000 ? "\r\n" + "默认值：" + DefaultValue : ""),
-                        iconPath = "https://files.getquicker.net/_icons/VARPIC_" + QuickerVarMetaData[item["Type"].ToString()]["name"].ToString().ToUpper() + ".png",
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/" + QuickerVarMetaData[item["Type"].ToString()]["name"].ToString().ToLower() + ".png",
                     };
                     data.Add(temp);
                 }
             }
+            //data.Add(new CustomCompletionData()
+            //{
+            //    name = "quicker_in_param",
+            //    actualText = "quicker_in_param}",
+            //    replaceOffset = 0,
+            //    description = "介绍：保存有传入动作的参数",
+            //    iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/text.png",
+            //});
         }
 
         private void GetDataFromPredefindTypes(string token, IList<ICompletionData> data)
@@ -305,7 +334,7 @@ namespace SimpleCodeCompletion
                     actualText = item.IsGenericType ? Regex.Replace(name, @"`\d+$", "<$1>") : name,
                     priority = 10,
                     description = name,
-                    iconPath = "https://files.getquicker.net/_icons/63C96D04CEC05D6370F98EF63E3B3F10E6F7E349.png"
+                    iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/class.png"
                 };
                 if (item != null)
                 {
@@ -360,8 +389,9 @@ namespace SimpleCodeCompletion
             string varPattern = @"(?<!\w)(?<var>[a-zA-Z]\w*)";
             var pattern = new Regex(String.Format(@"{0}{2}{1}\s*(;|=)", typePattern, varPattern, space), RegexOptions.Multiline);
             var matches = pattern.Matches(allCode);
-            foreach (var item in matches.OfType<Match>())
+            foreach (var group in matches.OfType<Match>().GroupBy(x => x.Groups["var"].Value + x.Groups["type"].Value))
             {
+                var item = group.First(x => true);
                 string varName = item.Groups["var"].Value;
                 if (varName.StartsWith(token, StringComparison.OrdinalIgnoreCase))
                 {
@@ -370,7 +400,7 @@ namespace SimpleCodeCompletion
                         name = varName,
                         replaceOffset = token.Length,
                         description = item.Groups["type"].Value,
-                        iconPath = "https://files.getquicker.net/_icons/1844065A14F3F674BCBF53516ABC0B0B01CCE660.png"
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/globalvar.png"
                     });
                 }
             }
@@ -390,15 +420,25 @@ namespace SimpleCodeCompletion
                 list.AddRange(GetQuickerVarTypes(parentWithoutDot));
                 return list;
             }
+            if (parentWithoutDot.EndsWith("]"))
+            {
+                var itemParent = Regex.Replace(parentWithoutDot, @"\[.*\]$", "");
+                var enumType = GetParentPossibleTypes(itemParent, allCode);
+                foreach (var type in enumType)
+                {
+                    list.AddRange(type.GetProperties().Where(x => x.Name == "Item").Select(x => x.PropertyType));
+                }
+                return list;
+            }
             string typePattern = @"(?<type>(?<![<>,\w])[a-zA-Z][<>, \w]+)";
             string space = @" +";
             string delegratePattern = @" *=> *((?!\=\>).)*";
-            var linqPattern = new Regex(String.Format(@"{1}{0}{1}\.\w*$", delegratePattern, parentWithoutDot));
+            var linqPattern = new Regex(String.Format(@"{1}{0}{1}(?!\w)(?:\[.*?\])?\.\w*$", delegratePattern, parentWithoutDot));
             if (linqPattern.IsMatch(allCode))
             {
                 string varPattern = @"(?<![\w{])(?<var>[a-zA-Z{][\w}]*)";
                 string linqFuncPattern = @"[A-Z][\w<>]+";
-                var findEnumerablePattern = new Regex(String.Format(@"{0}\.{2}\( *{1}{3}{1}\.\w*$", varPattern, parentWithoutDot, linqFuncPattern, delegratePattern));
+                var findEnumerablePattern = new Regex(String.Format(@"{0}\.{2}\( *{1}{3}{1}(?:\[.*?\])?\.\w*$", varPattern, parentWithoutDot, linqFuncPattern, delegratePattern));
                 var match = findEnumerablePattern.Match(allCode);
                 if (match.Success)
                 {
@@ -511,21 +551,13 @@ namespace SimpleCodeCompletion
                             types.AddRange(itemsFromPredefindTypes);
                             break;
                         }
-                        //try
-                        //{
-                        //    if (evalContext == null)
-                        //    {
-                        //        evalContext = new EvalContext();
-                        //        evalContext.UseLocalCache = true;
-                        //        evalContext.RegisterType(CustomSupportTypes);
-                        //    }
+                        if (TypeGetter != null)
+                        {
+                            var temp = TypeGetter(typestring);
+                            if (temp != null)
+                                types.Add(temp);
+                        }
 
-                        //    //AppHelper.ShowInformation(typestring);
-                        //    var type = evalContext.Execute<Type>("typeof(" + typestring + ")");
-                        //    if (type != null)
-                        //        types.Add(type);
-                        //}
-                        //catch (Exception e) { }
                         break;
                 }
             }
@@ -545,68 +577,70 @@ namespace SimpleCodeCompletion
                 Type[] interfaces = type.GetInterfaces();
                 var methods = type.GetMethods(flag);
                 //var extensionMethod = type.GetMethods(BindingFlags.Public | BindingFlags.Static).Where(t => t.IsDefined(typeof(ExtensionAttribute), false));
-                foreach (var method in methods.Distinct(comparer))
+                foreach (var group in methods.Where(x => !x.Name.Contains("_")).GroupBy(x => x.Name))
                 {
-                    IEnumerable<ParameterInfo> paramss = null;
-                    bool isExtension = method.IsDefined(typeof(ExtensionAttribute), false);
-                    if (isExtension && isInstance)
+                    var method = group.First(x => true);
+                    string description = String.Join("\r\n", group.Select(m =>
                     {
-                        paramss = method.GetParameters().Skip(1);
-                    }
-                    else
-                        paramss = method.GetParameters();
+                        IEnumerable<ParameterInfo> paramss = null;
+                        bool isExtension = m.IsDefined(typeof(ExtensionAttribute), false);
+                        if (isExtension && isInstance)
+                        {
+                            paramss = m.GetParameters().Skip(1);
+                        }
+                        else
+                            paramss = m.GetParameters();
+                        return ((!isInstance) ? "static: " : "") + GetGenericTypeName(type)
+                                + "."
+                                + m.Name
+                                + "("
+                                + String.Join(", ", paramss.Select(y => GetGenericTypeName(y.ParameterType) + " " + y.Name))
+                                + "): "
+                                + m.ReturnType.Name;
+                    }));
+                    string genericPart = (method.IsGenericMethod ? "<>" : "");
+                    var onedata = new CustomCompletionData()
+                    {
+                        name = method.Name + genericPart,
+                        actualText = method.Name +
+                                    ((method.IsGenericMethod && !method.ContainsGenericParameters) ? "<$1>" : "") +
+                                    (method.GetParameters().Count() > 0 ? "($1" : "(") + ")",
+                        priority = types.Count() - i,
+                        description = description,
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/method.png"
+                    };
+                    data.Add(onedata);
 
-                    if (!method.Name.Contains("_"))
+                }
+                if (interfaces.Any(x => x.Name.StartsWith("IEnumerable")))
+                    foreach (var group in typeof(Enumerable).GetMethods().Where(x => !x.Name.Contains("_")).GroupBy(x => x.Name))
                     {
-                        string genericPart = (method.IsGenericMethod ? "<>" : "");
+                        var method = group.First(x => true);
+                        var ts = GetIEnumerableTs(type).First(x => true);
+                        var TSourse = ts.GetGenericArguments()[0].Name;
+                        string description = String.Join("\r\n", group.Select(m =>
+                        {
+                            var paramss = m.GetParameters().Skip(1);
+                            return GetGenericTypeName(ts)
+                                + "."
+                                + m.Name
+                                + "("
+                                + string.Join(", ", paramss.Select(x => GetGenericTypeName(x.ParameterType).Replace("TSource", TSourse) + " " + x.Name))
+                                + "): "
+                                + GetGenericTypeName(m.ReturnType);
+                        }));
+                        string genericPart = ((method.IsGenericMethod && !method.ContainsGenericParameters) ? "<>" : "");
                         var onedata = new CustomCompletionData()
                         {
                             name = method.Name + genericPart,
                             actualText = method.Name +
                                         ((method.IsGenericMethod && !method.ContainsGenericParameters) ? "<$1>" : "") +
-                                        (paramss.Count() > 0 ? "($1" : "(") +
-                                        String.Join(", ", paramss.Select(x => IsFunc(x) ? "x => $1" : "")) + ")",
-                            priority = types.Count() - i + 10 - paramss.Count(),
-                            description = ((!isInstance) ? "static: " : "") + GetGenericTypeName(type)
-                                         + "."
-                                         + method.Name
-                                         + "("
-                                         + String.Join(", ", paramss.Select(x => GetGenericTypeName(x.ParameterType) + " " + x.Name))
-                                         + "): "
-                                         + method.ReturnType.Name,
-                            iconPath = "https://files.getquicker.net/_icons/844EEFDA8D988E83A6BC89FE8513AADBE72930C4.png"
+                                        (method.GetParameters().Count() > 0 ? "($1" : "(") + ")",
+                            priority = types.Count() - i,
+                            description = description,
+                            iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/method.png"
                         };
                         data.Add(onedata);
-                    }
-
-                }
-                if (interfaces.Any(x => x.Name.StartsWith("IEnumerable")))
-                    foreach (var method in typeof(Enumerable).GetMethods().Distinct(comparer))
-                    {
-                        var ts = GetIEnumerableTs(type);
-                        if (!method.Name.Contains("_"))
-                        {
-                            var paramss = method.GetParameters().Skip(1);
-                            string genericPart = ((method.IsGenericMethod && !method.ContainsGenericParameters) ? "<>" : "");
-                            var onedata = new CustomCompletionData()
-                            {
-                                name = method.Name + genericPart,
-                                actualText = method.Name +
-                                ((method.IsGenericMethod && !method.ContainsGenericParameters) ? "<$1>" : "") +
-                                (paramss.Count() > 0 ? "($1" : "(") +
-                                string.Join(", ", paramss.Select(x => IsFunc(x) ? "x => $1" : "")) + ")",
-                                priority = types.Count() - i + 10 - paramss.Count(),
-                                description = string.Join(", ", ts.Select(x => GetGenericTypeName(x)))
-                                             + ".\r\n"
-                                             + method.Name
-                                             + "("
-                                             + string.Join(", ", paramss.Select(x => GetGenericTypeName(x.ParameterType) + " " + x.Name))
-                                             + "):  "
-                                             + GetGenericTypeName(method.ReturnType),
-                                iconPath = "https://files.getquicker.net/_icons/844EEFDA8D988E83A6BC89FE8513AADBE72930C4.png"
-                            };
-                            data.Add(onedata);
-                        }
 
                     }
             }
@@ -642,7 +676,7 @@ namespace SimpleCodeCompletion
                             actualText = prop.Name,
                             priority = types.Count() - i,
                             description = type.Name + "." + prop.Name + ": " + prop.PropertyType.Name,
-                            iconPath = "https://files.getquicker.net/_icons/8606B55A3EA3EA7E76D5511CC6FC247354E49E99.png"
+                            iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/property.png"
                         };
                         data.Add(onedata);
                     }
@@ -669,7 +703,7 @@ namespace SimpleCodeCompletion
                             actualText = field.Name,
                             priority = types.Count() - i,
                             description = type.Name + "." + field.Name + ": " + field.FieldType.Name,
-                            iconPath = "https://files.getquicker.net/_icons/9CEDE326357A8F717B40DCAB4DC3AB875DDFF0B3.png"
+                            iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/field.png"
                         };
                         data.Add(onedata);
                     }
@@ -693,7 +727,7 @@ namespace SimpleCodeCompletion
                 for (int i = 0; i < typeParameters.Length; ++i)
                 {
                     string typeParamName = GetGenericTypeName(typeParameters[i]);
-                    friendlyName += (i == 0 ? typeParamName : "," + typeParamName);
+                    friendlyName += (i == 0 ? typeParamName : ", " + typeParamName);
                 }
                 friendlyName += ">";
             }
@@ -728,7 +762,7 @@ namespace SimpleCodeCompletion
             var currentCursorPosition = sender.Caret.Position;
             var selection = new RectangleSelection(sender, new TextViewPosition(currentCursorPosition.Line, currentCursorPosition.Column - 30 >= 0 ? currentCursorPosition.Column - 30 : 0), currentCursorPosition);
             // 正则获取Parent
-            var parentMatch = Regex.Match(selection.GetText(), @"(?<=([^\w{}]|^))[^.]*?\.(?=\w*$)", RegexOptions.RightToLeft);
+            var parentMatch = Regex.Match(selection.GetText(), @"(?<=([^\w{}]|^))[^.]*?(?:\[.*?\])?\.(?=\w*$)", RegexOptions.RightToLeft);
             if (parentMatch.Success)
             {
                 return parentMatch.Value;
@@ -760,12 +794,11 @@ namespace SimpleCodeCompletion
 
         private string ValueTypeHandle(string name)
         {
-            return Regex.Replace(name, @"^(Int32|Double|String)$", (m) =>
+            return Regex.Replace(name, @"^(Int32|Double|String|Char)$", (m) =>
             {
                 return m.Value
                         .Replace("Int32", "int")
-                        .Replace("Double", "double")
-                        .Replace("String", "string");
+                        .ToLower();
             });
         }
 
@@ -809,6 +842,15 @@ namespace SimpleCodeCompletion
 
     public class CustomCompletionData : ICompletionData
     {
+        public int replaceOffset = 0; // 替换选中补全项时的偏移量，默认为0，当非.触发时为token的长度
+        public int completeOffset = 0; // 替换完成后光标的偏移量，用来将光标定位到括号内等位置
+        public string description = ""; // 数据的介绍
+        public string name; // 数据在补全窗口中的文字
+        public string actualText; // 实际替换时的文字
+        public string parent = ""; // 数据的父类，比如 ToInt32() 的父类是「Convert.」
+        public int priority = 0; // 当有多条数据时展示的优先级，优先级越高越靠上
+        public string iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/custom.png";
+
         public CustomCompletionData(JObject item, int offset = 0)
         {
             // 暂时废弃
@@ -817,28 +859,23 @@ namespace SimpleCodeCompletion
             //this.completeOffset = item["completeOffset"].ToObject<int>();
             //this.replaceOffset = offset;
         }
-
         public CustomCompletionData()
         {
 
         }
-
         public System.Windows.Media.ImageSource Image
         {
             get
             {
-
-                return GetImage(this.iconPath);
+                return new BitmapImage(new Uri(iconPath));
+                //return GetImage(this.iconPath);
                 //return null; 
             }
         }
-
         public string Text
         {
             get { return name; }
         }
-
-        // Use this property if you want to show a fancy UIElement in the drop down list.
         public object Content
         {
             get
@@ -846,19 +883,17 @@ namespace SimpleCodeCompletion
                 return Text;
             }
         }
-
         public object Description
         {
-            get {
+            get
+            {
                 var control = new DescriptionControl();
                 control.textBox2.Text = description;
                 return control;
                 //return description;
             }
         }
-
         public double Priority { get { return 1.0; } }
-
         public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
         {
             if (String.IsNullOrEmpty(this.actualText))
@@ -883,7 +918,6 @@ namespace SimpleCodeCompletion
             }
 
         }
-
         private ImageSource GetImage(string path)
         {
             string text = path;
@@ -899,13 +933,6 @@ namespace SimpleCodeCompletion
             }
             return bitmapImage;
         }
-        public int replaceOffset = 0; // 替换选中补全项时的偏移量，默认为0，当非.触发时为token的长度
-        public int completeOffset = 0; // 替换完成后光标的偏移量，用来将光标定位到括号内等位置
-        public string description = ""; // 数据的介绍
-        public string name; // 数据在补全窗口中的文字
-        public string actualText; // 实际替换时的文字
-        public string parent = ""; // 数据的父类，比如 ToInt32() 的父类是「Convert.」
-        public int priority = 0; // 当有多条数据时展示的优先级，优先级越高越靠上
-        public string iconPath = "https://files.getquicker.net/_icons/3EE2EC560B20DAB8D47A981922038717B5A6B703.png";
+
     }
 }

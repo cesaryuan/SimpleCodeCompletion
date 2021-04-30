@@ -30,6 +30,7 @@ namespace SimpleCodeCompletion
         {
             InitializeComponent();
             this.textBox2.SyntaxHighlighting = CodeCompletion.highlighting;
+            //this.textBox2.TextArea.SetValue(TextBlock.LineHeightProperty, this.textBox2.FontSize * 1000);
         }
     }
 }

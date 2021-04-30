@@ -15,6 +15,6 @@
         BorderBrush="{x:Null}"
         FontFamily="Consolas"
         HorizontalScrollBarVisibility="Disabled"
-        Text="TextBoxdddddddddddddddddddddddd"
+        Text=""
         VerticalScrollBarVisibility="Disabled" />
 </UserControl>

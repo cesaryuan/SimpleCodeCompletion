@@ -89,12 +89,12 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resource1.resx</DependentUpon>
     </Compile>
-    <Compile Include="UserControl1.xaml.cs">
-      <DependentUpon>UserControl1.xaml</DependentUpon>
+    <Compile Include="DescriptionControl.xaml.cs">
+      <DependentUpon>DescriptionControl.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Page Include="UserControl1.xaml">
+    <Page Include="DescriptionControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -106,7 +106,30 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="DescriptionHighlight.xml" />
+    <EmbeddedResource Include="Resources\DescriptionHighlight.xml" />
+    <Resource Include="Resources\Icon\text.png" />
+    <Resource Include="Resources\Icon\object.png" />
+    <Resource Include="Resources\Icon\number.png" />
+    <Resource Include="Resources\Icon\mouse.png" />
+    <Resource Include="Resources\Icon\list.png" />
+    <Resource Include="Resources\Icon\keyboard.png" />
+    <Resource Include="Resources\Icon\integer.png" />
+    <Resource Include="Resources\Icon\image.png" />
+    <Resource Include="Resources\Icon\file.png" />
+    <Resource Include="Resources\Icon\dict.png" />
+    <Resource Include="Resources\Icon\datetime.png" />
+    <Resource Include="Resources\Icon\boolean.png" />
+    <Resource Include="Resources\Icon\any.png" />
+    <Resource Include="Resources\Snippets.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\Icon\class.png" />
+    <Resource Include="Resources\Icon\custom.png" />
+    <Resource Include="Resources\Icon\field.png" />
+    <Resource Include="Resources\Icon\globalvar.png" />
+    <Resource Include="Resources\Icon\keywords.png" />
+    <Resource Include="Resources\Icon\method.png" />
+    <Resource Include="Resources\Icon\property.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

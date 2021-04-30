@@ -72,6 +72,9 @@
     <ErrorReport>prompt</ErrorReport>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
+  <PropertyGroup>
+    <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="HandyControl, Version=3.1.0.0, Culture=neutral, PublicKeyToken=93dcfca1bd14948b" />
     <Reference Include="ICSharpCode.AvalonEdit">

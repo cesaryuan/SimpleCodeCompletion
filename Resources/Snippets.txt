@@ -1,0 +1,66 @@
+[
+    {
+        "name": "Select()",
+        "actualText": "Select( x => $1 )",
+        "parent": ".",
+        "description": "",
+        "priority": 0
+    },
+    {
+        "name": "Dictionary<,>",
+        "actualText": "Dictionary<string, object>",
+        "parent": "",
+        "description": "",
+        "priority": 0
+    },
+    {
+        "name": "if",
+        "actualText": "if ($1)\n{\n\t\n}",
+        "parent": "",
+        "description": "",
+        "priority": 0
+    },
+    {
+        "name": "List<>",
+        "actualText": "List<$1>",
+        "description": "",
+        "priority": 0,
+        "parent": "",
+        "iconPath": "https://files.getquicker.net/_icons/63C96D04CEC05D6370F98EF63E3B3F10E6F7E349.png"
+    },
+    {
+        "name": "for",
+        "actualText": "for (int i = 0; i < $1; i++)\r\n{\r\n\r\n}",
+        "description": "",
+        "priority": 0,
+        "parent": ""
+    },
+    {
+        "name": "foreach",
+        "actualText": "foreach (var item in $1)\r\n{\r\n\r\n}",
+        "description": "",
+        "priority": 0,
+        "parent": ""
+    },
+    {
+        "name": "while",
+        "actualText": "while($1){\r\n\r\n}",
+        "description": "",
+        "priority": 0,
+        "parent": ""
+    },
+    {
+        "name": "switch",
+        "actualText": "switch ($1)\r\n{\r\n    case \"\":\r\n        break;\r\n    default:\r\n        break;\r\n}",
+        "description": "",
+        "priority": 0,
+        "parent": ""
+    },
+    {
+        "name": "try",
+        "actualText": "try{\r\n\t$1\r\n}\r\ncatch(Exception e){\r\n\r\n}",
+        "description": "",
+        "priority": 0,
+        "parent": ""
+    }
+]

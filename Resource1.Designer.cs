@@ -64,23 +64,51 @@ namespace SimpleCodeCompletion {
         ///   查找类似 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
         ///&lt;SyntaxDefinition name=&quot;C#&quot;
         ///        xmlns=&quot;http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008&quot;&gt;
-        ///	&lt;Color name=&quot;Comment&quot; foreground=&quot;Green&quot; /&gt;
-        ///	&lt;Color name=&quot;String&quot; foreground=&quot;Blue&quot; /&gt;
-        ///
+        ///	&lt;Color name=&quot;Method&quot; foreground=&quot;#8b531f&quot; /&gt;
+        ///	&lt;Color name=&quot;Class&quot; foreground=&quot;#2b91af&quot; /&gt;
+        ///	&lt;Color name=&quot;Type&quot; foreground=&quot;Blue&quot; /&gt;
+        ///	&lt;Color name=&quot;Return&quot; foreground=&quot;Blue&quot; /&gt;
         ///	&lt;!-- This is the main ruleset. --&gt;
         ///	&lt;RuleSet&gt;
-        ///		&lt;Span color=&quot;Comment&quot; begin=&quot;//&quot; /&gt;
-        ///		&lt;Span color=&quot;Comment&quot; multiline=&quot;true&quot; begin=&quot;/\*&quot; end=&quot;\*/&quot; /&gt;
-        ///
-        ///		&lt;Span color=&quot;String&quot;&gt;
-        ///			&lt;Begin&gt;&quot;&lt;/Begin&gt;
-        ///			&lt;End&gt;&quot;&lt;/End&gt;
-        ///			&lt;RuleSet&gt;
-        ///				&lt;!-- nested span for escape sequence [字符串的其余部分被截断]&quot;; 的本地化字符串。
+        ///		&lt;Rule foreground=&quot;Blue&quot;&gt;static:&lt;/Rule&gt;
+        ///		
+        ///		&lt;Rule color=&quot;Class&quot;&gt;\w+(?&amp;gt;&amp;lt;(((?!&amp;lt;|&amp;gt;)[\w,\s])*|(?&amp;lt;open&amp;gt;&amp;lt;)|(?&amp;lt;-open&amp; [字符串的其余部分被截断]&quot;; 的本地化字符串。
         /// </summary>
         internal static string DescriptionHighlight {
             get {
                 return ResourceManager.GetString("DescriptionHighlight", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   查找类似 [
+        ///    {
+        ///        &quot;name&quot;: &quot;Select()&quot;,
+        ///        &quot;actualText&quot;: &quot;Select( x =&gt; $1 )&quot;,
+        ///        &quot;parent&quot;: &quot;.&quot;,
+        ///        &quot;description&quot;: &quot;&quot;,
+        ///        &quot;priority&quot;: 0
+        ///    },
+        ///    {
+        ///        &quot;name&quot;: &quot;Dictionary&lt;,&gt;&quot;,
+        ///        &quot;actualText&quot;: &quot;Dictionary&lt;string, object&gt;&quot;,
+        ///        &quot;parent&quot;: &quot;&quot;,
+        ///        &quot;description&quot;: &quot;&quot;,
+        ///        &quot;priority&quot;: 0
+        ///    },
+        ///    {
+        ///        &quot;name&quot;: &quot;if&quot;,
+        ///        &quot;actualText&quot;: &quot;if ($1)\n{\n\t\n}&quot;,
+        ///        &quot;parent&quot;: &quot;&quot;,
+        ///        &quot;description&quot;: &quot;&quot;,
+        ///        &quot;priority&quot;: 0
+        ///    },
+        ///    {
+        ///        [字符串的其余部分被截断]&quot;; 的本地化字符串。
+        /// </summary>
+        internal static string Snippets {
+            get {
+                return ResourceManager.GetString("Snippets", resourceCulture);
             }
         }
     }
