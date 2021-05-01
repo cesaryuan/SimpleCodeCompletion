@@ -19,6 +19,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Xml;
+using System.Net.Http;
+using System.Text;
 
 namespace SimpleCodeCompletion
 {
@@ -61,13 +63,14 @@ namespace SimpleCodeCompletion
             typeof(RegexOptions),
             typeof(Assembly),
             typeof(Type),
+            typeof(Match)
         };
         Func<string, string, int> GetMatchQuality = null;
         CompletionDataComparer comparer = new CompletionDataComparer();
         List<CustomCompletionData> CustomSnippets = new List<CustomCompletionData>();
         Dictionary<string, List<Type>> CustomVarTypeDefine = new Dictionary<string, List<Type>>();
         Func<string, Type> TypeGetter = null;
-
+        private static readonly HttpClient client = new HttpClient();
         public CodeCompletion(
             TextEditor textEditor,
             CompletionWindow completionWindow = null,
@@ -142,10 +145,13 @@ namespace SimpleCodeCompletion
                         };
                     completionWindow.CloseAutomatically = true;
                     IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
-
+                    
                     GetDataFromSnippets(parent, "", data);
                     GetDataFromReflection(textArea, data);
-
+                    if (data.Count() < 5)
+                    {
+                        GetDataFromAPI(textArea, data);
+                    }
                     // 补全数据不为空，则显示补全窗口
                     if (data.Count() > 0)
                     {
@@ -292,6 +298,125 @@ namespace SimpleCodeCompletion
             }
         }
 
+        private async void GetDataFromAPI(TextArea textArea, IList<ICompletionData> data)
+        {
+            JObject jsonBody = JObject.Parse(@"{
+    ""CodeBlock"": """",
+    ""OriginalCodeBlock"": """",
+    ""Language"": ""CSharp"",
+    ""Compiler"": ""Net45"",
+    ""ProjectType"": ""Console"",
+    ""OriginalFiddleId"": ""O5VX2a"",
+    ""NuGetPackageVersionIds"": ""73703"",
+    ""OriginalNuGetPackageVersionIds"": ""73703"",
+    ""TimeOffset"": ""8"",
+    ""ConsoleInputLines"": [],
+    ""MvcViewEngine"": ""Razor"",
+    ""MvcCodeBlock"": {
+        ""Model"": """",
+        ""View"": """",
+        ""Controller"": """"
+    },
+    ""OriginalMvcCodeBlock"": {
+        ""Model"": """",
+        ""View"": """",
+        ""Controller"": """"
+    },
+    ""UseResultCache"": false,
+    ""FileType"": ""Console"",
+    ""Position"": 307
+}");
+            string leftWrap = @"using System;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System.IO;
+					
+public class Program
+{
+	public static void Main()
+	{";
+            string rightWrap = @"}}";
+            string declareVar = string.Join("", QuickerVarInfo.Select(x => QuickerVarMetaData[x["Type"].ToString()]["type"].ToString() + " v_" + x["Key"] + ";"));
+            string originCode = textArea.TextView.Document.Text.Substring(0, textArea.Caret.Offset) + "@#$%" + textArea.TextView.Document.Text.Substring(textArea.Caret.Offset);
+            string code = ReplaceQuickerVar(originCode);
+            string handledCode = leftWrap + declareVar + code + rightWrap;
+            int positon = handledCode.IndexOf("@#$%");
+            handledCode = handledCode.Remove(positon, 4);
+            jsonBody["CodeBlock"] = handledCode;
+            jsonBody["OriginalCodeBlock"] = handledCode;
+            jsonBody["Position"] = positon;
+            HttpRequestMessage httpRequestMessage = new HttpRequestMessage(new HttpMethod("POST"), "https://dotnetfiddle.net/Home/GetAutoComplete");
+            httpRequestMessage.Content = new StringContent(jsonBody.ToString(), Encoding.UTF8, "application/json");
+            var response = await client.SendAsync(httpRequestMessage);
+            var responseString = await response.Content.ReadAsStringAsync();
+            var Result = JArray.Parse(responseString);
+            foreach (var group in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 2).GroupBy(x => x["Name"].ToString()))
+            {
+                var method = group.First(x => true);
+                bool IsGeneric = (bool)method["IsGeneric"];
+                bool IsExtension = (bool)method["IsExtension"];
+                bool IsStatic = (bool)method["IsStatic"];
+                string description = String.Join("\r\n", group.Select(m =>
+                {
+                    IEnumerable<JToken> paramss = null;
+                    if (IsExtension)
+                    {
+                        paramss = m["Params"].Skip(1);
+                    }
+                    else
+                        paramss = m["Params"];
+                    return ((!IsStatic) ? "static: " : "")
+                            + m["Name"]
+                            + "("
+                            + String.Join(", ", paramss.Select(y => (((bool)y["IsParams"]) ? "params " : "") + y["Type"] + " " + y["Name"]))
+                            + "): " + m["Type"];
+                }));
+
+                string genericPart = (IsGeneric ? " <>" : "");
+                var onedata = new CustomCompletionData()
+                {
+                    name = method["Name"] + genericPart,
+                    actualText = method["Name"] +
+                                (IsGeneric ? "<>" : "") +
+                                (method["Params"].Count() > 0 ? "($1" : "(") + ")",
+                    priority = 0,
+                    description = description,
+                    iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/method.png"
+                };
+                data.Add(onedata);
+
+            }
+            foreach (var prop in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 0))
+            {
+                bool isParams = (bool)prop["IsParams"];
+                var onedata = new CustomCompletionData()
+                {
+                    name = prop["Name"].ToString(),
+                    actualText = prop["Name"].ToString(),
+                    priority = 1,
+                    description = prop["Name"] + ": " + prop["Type"],
+                    iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/property.png"
+                };
+                data.Add(onedata);
+            }
+        }
+
+        private string ReplaceQuickerVar(string expression)
+        {
+            foreach (var keyValuePair in QuickerVarInfo)
+            {
+                string text = "v_" + keyValuePair["Key"];
+                if (expression.Contains("{" + keyValuePair["Key"] + "}"))
+                {
+                    expression = expression.Replace("{" + keyValuePair["Key"] + "}", text);
+                }
+            }
+            return expression;
+        }
         private void GetDataFromQuickerVars(IList<ICompletionData> data)
         {
             foreach (var item in QuickerVarInfo.OfType<JObject>())
