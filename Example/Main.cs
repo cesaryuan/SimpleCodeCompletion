@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using Z.Expressions;
 using SimpleCodeCompletion;
+using Newtonsoft.Json.Linq;
 
 namespace TextWindowCodeCompletion
 {
@@ -14,11 +15,21 @@ namespace TextWindowCodeCompletion
         {
             var dict = new Dictionary<string, List<Type>>() { { "test", new List<Type>() { typeof(Bitmap) } } };
             var AllCompletionData = new List<CustomCompletionData>();
-            
+            var aa = new JArray()
+            {
+                JObject.FromObject(new {
+                    Key="test",
+                    Type=0,
+                    Desc="",
+                    DefaultValue=""
+                })
+            };
             new CodeCompletion(textEditor,
                                 CustomSnippets: AllCompletionData,
                                 CustomGetMatchQualityFunc: null,
-                                TypeGetter: new Func<string, Type>(gettype));
+                                TypeGetter: new Func<string, Type>(gettype),
+                                QuickerVarInfo: aa
+                              );
             textEditor.TextArea.Document.Text = @"List<string> ll;
 ll.Select(x => x.Select(x => x))
 ll[0]
@@ -26,6 +37,14 @@ Path
 if
 Dic
 {test}
+foreach (var item in {test})
+{
+	item
+}
+foreach (var item in new List<Bitmap>())
+{
+	item.
+}
 ";
         }
 

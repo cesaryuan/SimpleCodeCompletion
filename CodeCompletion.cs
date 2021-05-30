@@ -71,6 +71,17 @@ namespace SimpleCodeCompletion
         Dictionary<string, List<Type>> CustomVarTypeDefine = new Dictionary<string, List<Type>>();
         Func<string, Type> TypeGetter = null;
         private static readonly HttpClient client = new HttpClient();
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="textEditor">传入编辑器实例</param>
+        /// <param name="completionWindow"></param>
+        /// <param name="CustomGetMatchQualityFunc"></param>
+        /// <param name="QuickerVarInfo"></param>
+        /// <param name="CustomSnippets"></param>
+        /// <param name="CustomVarTypeDefine"></param>
+        /// <param name="TypeGetter"></param>
         public CodeCompletion(
             TextEditor textEditor,
             CompletionWindow completionWindow = null,
@@ -147,8 +158,8 @@ namespace SimpleCodeCompletion
                     IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
                     
                     GetDataFromSnippets(parent, "", data);
-                    GetDataFromReflection(textArea, data);
-                    if (data.Count() < 5)
+                    
+                    if (!GetDataFromReflection(textArea, data))
                     {
                         GetDataFromAPI(textArea, data);
                     }
@@ -334,7 +345,8 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.IO;
-					
+using System.Drawing;
+using System.Reflection;
 public class Program
 {
 	public static void Main()
@@ -351,58 +363,74 @@ public class Program
             jsonBody["Position"] = positon;
             HttpRequestMessage httpRequestMessage = new HttpRequestMessage(new HttpMethod("POST"), "https://dotnetfiddle.net/Home/GetAutoComplete");
             httpRequestMessage.Content = new StringContent(jsonBody.ToString(), Encoding.UTF8, "application/json");
-            var response = await client.SendAsync(httpRequestMessage);
-            var responseString = await response.Content.ReadAsStringAsync();
-            var Result = JArray.Parse(responseString);
-            foreach (var group in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 2).GroupBy(x => x["Name"].ToString()))
+            try
             {
-                var method = group.First(x => true);
-                bool IsGeneric = (bool)method["IsGeneric"];
-                bool IsExtension = (bool)method["IsExtension"];
-                bool IsStatic = (bool)method["IsStatic"];
-                string description = String.Join("\r\n", group.Select(m =>
+                var response = await client.SendAsync(httpRequestMessage);
+                var responseString = await response.Content.ReadAsStringAsync();
+                var Result = JArray.Parse(responseString);
+                foreach (var group in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 2).GroupBy(x => x["Name"].ToString()))
                 {
-                    IEnumerable<JToken> paramss = null;
-                    if (IsExtension)
+                    var method = group.First(x => true);
+                    bool IsGeneric = (bool)method["IsGeneric"];
+                    bool IsExtension = (bool)method["IsExtension"];
+                    bool IsStatic = (bool)method["IsStatic"];
+                    string description = String.Join("\r\n", group.Select(m =>
                     {
-                        paramss = m["Params"].Skip(1);
-                    }
-                    else
-                        paramss = m["Params"];
-                    return ((!IsStatic) ? "static: " : "")
-                            + m["Name"]
-                            + "("
-                            + String.Join(", ", paramss.Select(y => (((bool)y["IsParams"]) ? "params " : "") + y["Type"] + " " + y["Name"]))
-                            + "): " + m["Type"];
-                }));
+                        IEnumerable<JToken> paramss = null;
+                        if (IsExtension)
+                        {
+                            paramss = m["Params"].Skip(1);
+                        }
+                        else
+                            paramss = m["Params"];
+                        return ((!IsStatic) ? "static: " : "")
+                                + m["Name"]
+                                + "("
+                                + String.Join(", ", paramss.Select(y => (((bool)y["IsParams"]) ? "params " : "") + y["Type"] + " " + y["Name"]))
+                                + "): " + m["Type"];
+                    }));
 
-                string genericPart = (IsGeneric ? " <>" : "");
-                var onedata = new CustomCompletionData()
-                {
-                    name = method["Name"] + genericPart,
-                    actualText = method["Name"] +
-                                (IsGeneric ? "<>" : "") +
-                                (method["Params"].Count() > 0 ? "($1" : "(") + ")",
-                    priority = 0,
-                    description = description,
-                    iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/method.png"
-                };
-                data.Add(onedata);
+                    string genericPart = (IsGeneric ? " <>" : "");
+                    var onedata = new CustomCompletionData()
+                    {
+                        name = method["Name"] + genericPart,
+                        actualText = method["Name"] +
+                                    (IsGeneric ? "<>" : "") +
+                                    (method["Params"].Count() > 0 ? "($1" : "(") + ")",
+                        priority = 0,
+                        description = description,
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/method.png"
+                    };
+                    data.Add(onedata);
 
-            }
-            foreach (var prop in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 0))
-            {
-                bool isParams = (bool)prop["IsParams"];
-                var onedata = new CustomCompletionData()
+                }
+                foreach (var prop in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 0))
                 {
-                    name = prop["Name"].ToString(),
-                    actualText = prop["Name"].ToString(),
-                    priority = 1,
-                    description = prop["Name"] + ": " + prop["Type"],
-                    iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/property.png"
-                };
-                data.Add(onedata);
+                    var onedata = new CustomCompletionData()
+                    {
+                        name = prop["Name"].ToString(),
+                        actualText = prop["Name"].ToString(),
+                        priority = 1,
+                        description = prop["Name"] + ": " + prop["Type"],
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/field.png"
+                    };
+                    data.Add(onedata);
+                }
+                foreach (var prop in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 1))
+                {
+                    var onedata = new CustomCompletionData()
+                    {
+                        name = prop["Name"].ToString(),
+                        actualText = prop["Name"].ToString(),
+                        priority = 1,
+                        description = prop["Name"] + ": " + prop["Type"],
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/property.png"
+                    };
+                    data.Add(onedata);
+                }
             }
+            catch { };
+
         }
 
         private string ReplaceQuickerVar(string expression)
@@ -484,8 +512,9 @@ public class Program
             }
         }
 
-        private void GetDataFromReflection(TextArea textArea, IList<ICompletionData> data)
+        private bool GetDataFromReflection(TextArea textArea, IList<ICompletionData> data)
         {
+            bool flag = false;
             var parent = GetParent(textArea);
             string allCode = GetCodeBeforeCaret(textArea);
             List<Type> temp = new List<Type>();
@@ -495,6 +524,7 @@ public class Program
 
             foreach (var item in GetMethods(temp, BindingFlags.Instance | BindingFlags.Public, true).Concat(GetPropertys(temp)))
             {
+                flag = true;
                 data.Add(item);
             }
 
@@ -503,16 +533,18 @@ public class Program
             // AppHelper.ShowInformation(parent);
             foreach (var item in GetMethods(temp, BindingFlags.Static | BindingFlags.Public, false).Concat(GetPropertys(temp)).Concat(GetFields(temp)))
             {
+                flag = true;
                 data.Add(item);
             }
+            return flag;
         }
 
         private bool GetDataFromPossibleVarNames(string token, string allCode, IList<ICompletionData> data)
         {
-            string typePattern = @"(?<=^(\$=)?\s*)(?<type>(?<![<>,\w])[a-zA-Z][<>, \w]+)";
+            string typePattern = @"(?<=^(\$=)?\s*|foreach *\()(?<type>(?<![<>,\w])[a-zA-Z][<>, \w]+)";
             string space = @" +";
             string varPattern = @"(?<!\w)(?<var>[a-zA-Z]\w*)";
-            var pattern = new Regex(String.Format(@"{0}{2}{1}\s*(;|=)", typePattern, varPattern, space), RegexOptions.Multiline);
+            var pattern = new Regex(String.Format(@"{0}{2}{1}\s*(;|=|in)", typePattern, varPattern, space), RegexOptions.Multiline);
             var matches = pattern.Matches(allCode);
             foreach (var group in matches.OfType<Match>().GroupBy(x => x.Groups["var"].Value + x.Groups["type"].Value))
             {
