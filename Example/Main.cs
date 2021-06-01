@@ -13,24 +13,21 @@ namespace TextWindowCodeCompletion
         static EvalContext evalContext;
         public static void Init(TextEditor textEditor)
         {
-            var dict = new Dictionary<string, List<Type>>() { { "test", new List<Type>() { typeof(Bitmap) } } };
+            var dict = new Dictionary<string, List<Type>>() { { "[test]", new List<Type>() { typeof(Bitmap) } } };
             var AllCompletionData = new List<CustomCompletionData>();
             var aa = new JArray()
             {
                 JObject.FromObject(new {
-                    Key="test",
+                    Key="[test]",
                     Type=0,
                     Desc="",
                     DefaultValue=""
                 })
             };
             new CodeCompletion(textEditor,
-                                CustomSnippets: AllCompletionData,
-                                CustomGetMatchQualityFunc: null,
-                                TypeGetter: new Func<string, Type>(gettype),
                                 QuickerVarInfo: aa
                               );
-            textEditor.TextArea.Document.Text = @"List<string> ll;
+            textEditor.TextArea.Document.Text = @"List<string> abcd;
 ll.Select(x => x.Select(x => x))
 ll[0]
 Path

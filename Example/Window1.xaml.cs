@@ -71,7 +71,7 @@ namespace TextWindowCodeCompletion
             JObject QuickcerVarInfo = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
 
             var data = (string)context.GetVarValue("代码片段");
-            Func<string, Type> typeGetter = (s) =>
+            CustomVarTypeGetter typeGetter = (s) =>
             {
                 try
                 {
@@ -124,12 +124,9 @@ namespace TextWindowCodeCompletion
                     CompletionWindow originCompletionWindow = GetPrivateFieid<CompletionWindow>("completionWindow", win);
                     new CodeCompletion(
                         textEditor,
-                        completionWindow: originCompletionWindow,
-                        CustomSnippets: AllCompletionData,
-                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
+                        //completionWindow: originCompletionWindow,
                         QuickerVarInfo: JArray.FromObject(_variables),
-                        CustomVarTypeDefine: varTypeDict,
-                        TypeGetter: typeGetter);
+                        CustomVarTypeDefine: varTypeDict);
                     AppHelper.ShowSuccess("启动成功");
                     win.Tag = true;
 
@@ -143,11 +140,11 @@ namespace TextWindowCodeCompletion
                     if (_variables == null)
                         _variables = (win as Quicker.View.X.ActionStepEditorWindow).Variables;
                     var _inputParamEditors = GetPrivateFieid<List<InputParamEditor2>>("_inputParamEditors", win);
-                    if (_inputParamEditors == null)
-                        _inputParamEditors = GetPrivateFieid<Dictionary<string, StepInputFieldControl>>("_inputFieldControls", win).Select(x =>
-                        {
-                            return GetPrivateFieid<InputParamEditor2>("_editor", x.Value);
-                        }).ToList();
+                    //if (_inputParamEditors == null)
+                    //    _inputParamEditors = GetPrivateFieid<Dictionary<string, StepInputFieldControl>>("_inputFieldControls", win).Select(x =>
+                    //    {
+                    //        return GetPrivateFieid<InputParamEditor2>("_editor", x.Value);
+                    //    }).ToList();
 
                     if (_inputParamEditors != null)
                     {
@@ -166,12 +163,9 @@ namespace TextWindowCodeCompletion
                                 {
                                     new CodeCompletion(
                                         textEditor,
-                                        completionWindow: GetPrivateFieid<CompletionWindow>("completionWindow", paramEditor),
-                                        CustomSnippets: AllCompletionData,
-                                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
+                                        //completionWindow: GetPrivateFieid<CompletionWindow>("completionWindow", paramEditor),
                                         QuickerVarInfo: JArray.FromObject(_variables),
-                                        CustomVarTypeDefine: varTypeDict,
-                                        TypeGetter: typeGetter);
+                                        CustomVarTypeDefine: varTypeDict);
 
                                 }
 
@@ -190,11 +184,7 @@ namespace TextWindowCodeCompletion
                 {
                     var textEditor = GetPrivateFieid<TextEditor>("TheText", win);
                     new CodeCompletion(
-                        textEditor,
-                        completionWindow: null,
-                        CustomSnippets: AllCompletionData,
-                        CustomGetMatchQualityFunc: AvalonEditExt.GetMatchQuality,
-                        TypeGetter: typeGetter);
+                        textEditor);
                 });
                 win.Tag = true;
                 AppHelper.ShowSuccess("启动成功");

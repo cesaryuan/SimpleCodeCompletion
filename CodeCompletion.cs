@@ -11,29 +11,31 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using System.Resources;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Xml;
-using System.Net.Http;
-using System.Text;
 
 namespace SimpleCodeCompletion
 {
     public class CodeCompletion
     {
         #region Quicker
-        public static ResourceManager rm = new ResourceManager("SimpleCodeCompletion.Resource1", Assembly.GetExecutingAssembly());
-        public static IHighlightingDefinition highlighting;
-
-        CompletionWindow completionWindow;
-        JArray QuickerVarInfo = new JArray();
-        JObject QuickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
-        Type[] PredefindTypes = new Type[]
+        public static IHighlightingDefinition DescriptionHighlighting;
+        static ResourceManager rm = new ResourceManager("SimpleCodeCompletion.Resource1", Assembly.GetExecutingAssembly());
+        static List<string[]> pairChars = new List<string[]>(){
+                    new string[]{"\"", "\"" },
+                    new string[]{"'", "'" },
+                    new string[]{"[", "]" },
+                    new string[]{"(", ")" },
+                };
+        static readonly JObject quickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
+        static Type[] predefindTypes = new Type[]
         {
             typeof(List<string>),
             typeof(Dictionary<string, object>),
@@ -65,209 +67,216 @@ namespace SimpleCodeCompletion
             typeof(Type),
             typeof(Match)
         };
-        Func<string, string, int> GetMatchQuality = null;
-        CompletionDataComparer comparer = new CompletionDataComparer();
-        List<CustomCompletionData> CustomSnippets = new List<CustomCompletionData>();
+        static CustomMatchQualityGetter customGetMatchQualityFunc = null;
+        static List<CustomCompletionData> CustomSnippets = JsonConvert.DeserializeObject<List<CustomCompletionData>>(rm.GetString("Snippets"));
+        static CustomVarTypeGetter TypeGetter = null;
+        static readonly HttpClient client = new HttpClient();
+
+        CompletionWindow completionWindow;
+        JArray quickerVarInfo = new JArray();
         Dictionary<string, List<Type>> CustomVarTypeDefine = new Dictionary<string, List<Type>>();
-        Func<string, Type> TypeGetter = null;
-        private static readonly HttpClient client = new HttpClient();
+        private bool IsClosingBrackets;
 
         /// <summary>
-        /// 
+        /// 为 ICSharpCode.AvalonEdit.TextEditor 实现一个简单的C#自动补全
         /// </summary>
-        /// <param name="textEditor">传入编辑器实例</param>
-        /// <param name="completionWindow"></param>
-        /// <param name="CustomGetMatchQualityFunc"></param>
-        /// <param name="QuickerVarInfo"></param>
-        /// <param name="CustomSnippets"></param>
-        /// <param name="CustomVarTypeDefine"></param>
-        /// <param name="TypeGetter"></param>
+        /// <param name="textEditor">要绑定的 TextEditor 实例</param>
+        /// <param name="QuickerVarInfo">Quicker的动作变量信息转换的JArray</param>
+        /// <param name="CustomVarTypeDefine">键为变量名，值为其对应的变量类型，用于为一些特殊变量指定类型，比如 _eval 变量的变量类型为 EvalContext</param>
         public CodeCompletion(
             TextEditor textEditor,
-            CompletionWindow completionWindow = null,
-            Func<string, string, int> CustomGetMatchQualityFunc = null,
             JArray QuickerVarInfo = null,
-            List<CustomCompletionData> CustomSnippets = null,
-            Dictionary<string, List<Type>> CustomVarTypeDefine = null,
-            Func<string, Type> TypeGetter = null)
+            Dictionary<string, List<Type>> CustomVarTypeDefine = null)
         {
-            this.CustomSnippets.AddRange(JsonConvert.DeserializeObject<List<CustomCompletionData>>(rm.GetString("Snippets")));
-            this.GetMatchQuality = CustomGetMatchQualityFunc;
-            if (CustomSnippets != null)
-                this.CustomSnippets.AddRange(CustomSnippets);
             if (QuickerVarInfo != null)
-                this.QuickerVarInfo = QuickerVarInfo;
+                this.quickerVarInfo = QuickerVarInfo;
             if (CustomVarTypeDefine != null)
                 this.CustomVarTypeDefine = CustomVarTypeDefine;
-            textEditor.TextArea.TextEntered += EnteredWrapper(completionWindow);
-            textEditor.TextArea.TextEntering += EnteringWrapper();
+
+            textEditor.TextArea.TextEntered += TextEnteredHandler;
+            textEditor.TextArea.TextEntering += TextEnteringHandler;
+            textEditor.KeyDown += KeyDownHandler;
             using (StringReader sr = new StringReader(CodeCompletion.rm.GetString("DescriptionHighlight")))
             using (XmlReader xmlReader = XmlReader.Create(sr))
             {
-                highlighting = HighlightingLoader.Load(xmlReader, HighlightingManager.Instance);
+                DescriptionHighlighting = HighlightingLoader.Load(xmlReader, HighlightingManager.Instance);
             }
         }
 
-        private TextCompositionEventHandler EnteringWrapper()
+        private void TextEnteringHandler(object sender, TextCompositionEventArgs e)
         {
-            return (object sender, TextCompositionEventArgs e) =>
+            if (!String.IsNullOrEmpty(e.Text) && completionWindow != null)
             {
-                if (!String.IsNullOrEmpty(e.Text) && completionWindow != null)
+                // 计划当补全窗口无可用项目时就关闭，但是好像不生效
+                if (!char.IsLetterOrDigit(e.Text[0]))
                 {
-                    // 计划当补全窗口无可用项目时就关闭，但是好像不生效
-                    if (!char.IsLetterOrDigit(e.Text[0]))
-                    {
-                        completionWindow.Close();
-                        return;
-                    }
-
-                }
-                //if (!char.IsLetterOrDigit(e.Text[0]))
-                //{
-                //	// Whenever a non-letter is typed while the completion window is open,
-                //	// insert the currently selected element.
-                //	completionWindow.CompletionList.RequestInsertion(e);
-                //}
-                // do not set e.Handled=true - we still want to insert the character that was typed
-            };
-        }
-        private TextCompositionEventHandler EnteredWrapper(object paramEditor)
-        {
-            return (object sender, TextCompositionEventArgs e) =>
-            {
-                if (completionWindow != null)
+                    completionWindow.Close();
                     return;
-                TextArea textArea = sender as TextArea;
-
-                if (e.Text == ".")
-                {
-                    // 获取parent，既「.」前面的字符
-
-                    var parent = GetParent(textArea);
-                    completionWindow = new CompletionWindow(textArea);
-                    completionWindow.Width = 230;
-
-                    if (GetMatchQuality != null)
-                        completionWindow.CustomGetMatchQualityFunc = (itemText, query) =>
-                        {
-                            if (query == "")
-                                return 1;
-                            return GetMatchQuality(itemText, query);
-                        };
-                    completionWindow.CloseAutomatically = true;
-                    IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
-                    
-                    GetDataFromSnippets(parent, "", data);
-                    
-                    if (!GetDataFromReflection(textArea, data))
-                    {
-                        GetDataFromAPI(textArea, data);
-                    }
-                    // 补全数据不为空，则显示补全窗口
-                    if (data.Count() > 0)
-                    {
-                        completionWindow.Show();
-                    }
-                    completionWindow.Closed += delegate
-                    {
-                        completionWindow = null;
-                    };
                 }
-                else if (e.Text == "{")
+
+            }
+            //if (!char.IsLetterOrDigit(e.Text[0]))
+            //{
+            //	// Whenever a non-letter is typed while the completion window is open,
+            //	// insert the currently selected element.
+            //	completionWindow.CompletionList.RequestInsertion(e);
+            //}
+            // do not set e.Handled=true - we still want to insert the character that was typed
+        }
+
+
+        private void TextEnteredHandler(object sender, TextCompositionEventArgs e)
+        {
+            if (completionWindow != null)
+                return;
+            TextArea textArea = sender as TextArea;
+            if (e.Text == ".")
+            {
+                DotComletion(textArea);
+            }
+            else if (e.Text == "{")
+            {
+                completionWindow = GetCompletionWindow(textArea);
+                IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
+                GetDataFromQuickerVars(data);
+
+
+                if (data.Count() > 0)
                 {
-                    // 获取parent，既「.」前面的字符
-
-                    var parent = GetParent(textArea);
-
-                    completionWindow = new CompletionWindow(textArea);
-                    completionWindow.Width = 220;
-
-                    if (GetMatchQuality != null)
-                        completionWindow.CustomGetMatchQualityFunc = (itemText, query) =>
-                        {
-                            if (query == "")
-                                return 1;
-                            return GetMatchQuality(itemText, query);
-                        };
-
-                    completionWindow.CloseAutomatically = true;
-                    IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
-                    GetDataFromQuickerVars(data);
-
-                    // 补全数据不为空，则显示补全窗口
-                    if (data.Count() > 0)
+                    completionWindow.Show();
+                }
+                completionWindow.Closed += delegate
+                {
+                    completionWindow = null;
+                };
+            }
+            else if (char.IsLetterOrDigit(e.Text[0]))
+            {
+                if (completionWindow == null)
+                {
+                    if (char.IsLetterOrDigit(textArea.GetAheadText(2)[0]))
+                        return;
+                    LetterCompletion(textArea);
+                }
+            }
+            else if (pairChars.Any(x => x[0] == e.Text || x[1] == e.Text))
+            {
+                if (pairChars.Any(x => x[1] == e.Text) && this.IsClosingBrackets)
+                {
+                    if (textArea.GetBehindText(1) == e.Text)
                     {
-                        completionWindow.Show();
+                        //textArea.RemoveBehindText(1);
+                        textArea.Document.UndoStack.Undo();
+                        textArea.Caret.Offset++;
+                        this.IsClosingBrackets = false;
                     }
-                    completionWindow.Closed += delegate
-                    {
-                        completionWindow = null;
-                    };
                 }
-                else if (e.Text == "(")
-                {
-                    textArea.Document.Insert(textArea.Caret.Offset, ")");
-                    textArea.Caret.Offset -= 1;
-                }
-                else if (e.Text == "\"")
+                else if (pairChars.Any(x => x[0] == e.Text))
                 {
                     //textArea.Selection.ReplaceSelectionWithText("\"");
-                    textArea.Document.Insert(textArea.Caret.Offset, "\"");
+                    textArea.Document.Insert(textArea.Caret.Offset, pairChars.First(x => x[0] == e.Text)[1]);
                     textArea.Caret.Offset -= 1;
+                    this.IsClosingBrackets = true;
                 }
-                else if (e.Text == "[")
+
+            }
+        }
+
+
+        private void LetterCompletion(TextArea textArea)
+        {
+            string token = GetToken(textArea);
+            if (token != "")
+            {
+                // 获取token的parent
+                string parent = GetParent(textArea);
+
+                // 生成补全窗口实例
+                completionWindow = GetCompletionWindow(textArea, token);
+                IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
+
+                // 从数据库里寻找匹配到的补全条目
+                GetDataFromSnippets(parent, token, data);
+                if (parent == "")
                 {
-                    textArea.Document.Insert(textArea.Caret.Offset, "]");
-                    textArea.Caret.Offset -= 1;
+                    GetDataFromPossibleVarNames(token, textArea.TextView.Document.Text, data);
+                    GetDataFromPredefindTypes(token, data);
+                    GetDataFromPredefindKeyWords(token, data);
                 }
-                else if (char.IsLetterOrDigit(e.Text[0]))
+
+                GetDataFromReflection(textArea, data);
+                // 补全数据不为空，则显示补全窗口
+                if (data.Count() > 0)
                 {
-                    // 如果已经存在completionWindow，则忽略此次事件
-                    if (completionWindow == null)
-                    {
-                        // 获取正在输入的Token
-                        string token = GetToken(textArea);
-                        if (token != "")
-                        {
-                            // 获取token的parent
-                            string parent = GetParent(textArea);
-
-                            // 生成补全窗口实例
-                            completionWindow = new CompletionWindow(textArea);
-                            if (GetMatchQuality != null)
-                                completionWindow.CustomGetMatchQualityFunc = (itemText, query) =>
-                                {
-                                    return GetMatchQuality(itemText, e.Text + query);
-                                };
-                            IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
-
-                            // 从数据库里寻找匹配到的补全条目
-                            GetDataFromSnippets(parent, token, data);
-                            if (parent == "")
-                            {
-                                GetDataFromPossibleVarNames(token, textArea.TextView.Document.Text, data);
-                                GetDataFromPredefindTypes(token, data);
-                                GetDataFromPredefindKeyWords(token, data);
-                            }
-
-                            GetDataFromReflection(textArea, data);
-                            // 补全数据不为空，则显示补全窗口
-                            if (data.Count() > 0)
-                            {
-                                completionWindow.Show();
-                            }
-
-                            // 绑定退出事件
-                            completionWindow.Closed += delegate
-                            {
-                                completionWindow = null;
-                            };
-                        }
-                    }
+                    completionWindow.Show();
                 }
 
+                // 绑定退出事件
+                completionWindow.Closed += delegate
+                {
+                    completionWindow = null;
+                };
+            }
+        }
+
+        private void DotComletion(TextArea textArea)
+        {
+            var parent = GetParent(textArea);
+            completionWindow = GetCompletionWindow(textArea);
+            IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
+
+            GetDataFromSnippets(parent, "", data);
+
+            if (!GetDataFromReflection(textArea, data))
+            {
+                GetDataFromAPI(textArea, data);
+            }
+            // 补全数据不为空，则显示补全窗口
+            if (data.Count() > 0)
+            {
+                completionWindow.Show();
+            }
+            completionWindow.Closed += delegate
+            {
+                completionWindow = null;
             };
         }
+
+        public void KeyDownHandler(object o, KeyEventArgs e)
+        {
+            TextArea textArea = ((TextEditor)o).TextArea;
+            if (e.Key == Key.Space && e.KeyboardDevice.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = true;
+
+                if (completionWindow == null)
+                {
+                    var fchar = textArea.GetAheadText(1);
+                    if (fchar == ".")
+                        DotComletion(textArea);
+                    else if (char.IsLetterOrDigit(fchar[0]))
+                        LetterCompletion(textArea);
+                }
+            }
+        }
+
+        private CompletionWindow GetCompletionWindow(TextArea textArea, string text = "")
+        {
+            var completionWindow = new CompletionWindow(textArea);
+            completionWindow.Width = 230;
+            completionWindow.CompletionList.InsertionRequested += (ss, ee) =>
+            {
+                this.IsClosingBrackets = true;
+            };
+            completionWindow.CustomGetMatchQualityFunc = (itemText, query) =>
+            {
+                return MatchQuery(itemText, text + query);
+            };
+            completionWindow.CloseAutomatically = true;
+
+            return completionWindow;
+        }
+
         private void GetDataFromPredefindKeyWords(string token, IList<ICompletionData> data)
         {
             var keywords = new List<string>()
@@ -352,7 +361,7 @@ public class Program
 	public static void Main()
 	{";
             string rightWrap = @"}}";
-            string declareVar = string.Join("", QuickerVarInfo.Select(x => QuickerVarMetaData[x["Type"].ToString()]["type"].ToString() + " v_" + x["Key"] + ";"));
+            string declareVar = string.Join("", quickerVarInfo.Select(x => quickerVarMetaData[x["Type"].ToString()]["type"].ToString() + " v_" + x["Key"] + ";"));
             string originCode = textArea.TextView.Document.Text.Substring(0, textArea.Caret.Offset) + "@#$%" + textArea.TextView.Document.Text.Substring(textArea.Caret.Offset);
             string code = ReplaceQuickerVar(originCode);
             string handledCode = leftWrap + declareVar + code + rightWrap;
@@ -435,7 +444,7 @@ public class Program
 
         private string ReplaceQuickerVar(string expression)
         {
-            foreach (var keyValuePair in QuickerVarInfo)
+            foreach (var keyValuePair in quickerVarInfo)
             {
                 string text = "v_" + keyValuePair["Key"];
                 if (expression.Contains("{" + keyValuePair["Key"] + "}"))
@@ -445,9 +454,10 @@ public class Program
             }
             return expression;
         }
+
         private void GetDataFromQuickerVars(IList<ICompletionData> data)
         {
-            foreach (var item in QuickerVarInfo.OfType<JObject>())
+            foreach (var item in quickerVarInfo.OfType<JObject>())
             {
                 if (item != null)
                 {
@@ -461,7 +471,7 @@ public class Program
                         replaceOffset = 0,
                         description = "介绍：" + Desc +
                                         (DefaultValue.Length < 10000 ? "\r\n" + "默认值：" + DefaultValue : ""),
-                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/" + QuickerVarMetaData[item["Type"].ToString()]["name"].ToString().ToLower() + ".png",
+                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/" + quickerVarMetaData[item["Type"].ToString()]["name"].ToString().ToLower() + ".png",
                     };
                     data.Add(temp);
                 }
@@ -478,7 +488,7 @@ public class Program
 
         private void GetDataFromPredefindTypes(string token, IList<ICompletionData> data)
         {
-            foreach (var item in PredefindTypes.Where(x => x.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase)))
+            foreach (var item in predefindTypes.Where(x => x.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase)))
             {
                 var name = ValueTypeHandle(item.Name);
                 var temp = new CustomCompletionData()
@@ -626,8 +636,8 @@ public class Program
             varName = varName.Trim('{', '}');
             try
             {
-                var varInfo = QuickerVarInfo.First(x => x["Key"].ToString() == varName);
-                return GetTypeWithString(QuickerVarMetaData[varInfo["Type"].ToString()]["type"].ToString());
+                var varInfo = quickerVarInfo.First(x => x["Key"].ToString() == varName);
+                return GetTypeWithString(quickerVarMetaData[varInfo["Type"].ToString()]["type"].ToString());
             }
             catch
             {
@@ -700,7 +710,7 @@ public class Program
                         types.Add(typeof(JsonConvert));
                         break;
                     default:
-                        var itemsFromPredefindTypes = PredefindTypes.Where(x =>
+                        var itemsFromPredefindTypes = predefindTypes.Where(x =>
                             GetGenericTypeName(x).Replace(" ", "") == typestring
                         );
                         if (itemsFromPredefindTypes.Count() > 0)
@@ -710,9 +720,16 @@ public class Program
                         }
                         if (TypeGetter != null)
                         {
-                            var temp = TypeGetter(typestring);
-                            if (temp != null)
-                                types.Add(temp);
+                            try
+                            {
+                                var temp = TypeGetter(typestring);
+                                if (temp != null)
+                                    types.Add(temp);
+                            }
+                            catch (Exception)
+                            {
+                            }
+
                         }
 
                         break;
@@ -959,6 +976,22 @@ public class Program
             });
         }
 
+        private int MatchQuery(string text, string query)
+        {
+            if (query == "")
+                return 1;
+            if (text.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+                return 3;
+            if (text.IndexOf(query, StringComparison.OrdinalIgnoreCase) != -1)
+                return 2;
+            if (query.All(x => text.IndexOf(x.ToString(), StringComparison.OrdinalIgnoreCase) != -1))
+                return 1;
+
+            if (customGetMatchQualityFunc != null)
+                return customGetMatchQualityFunc(text, query);
+            return -1;
+        }
+
         class CompletionDataComparer : IEqualityComparer<MethodInfo>
         {
             // Products are equal if their names and product numbers are equal.
@@ -997,6 +1030,45 @@ public class Program
         #endregion Quicker
     }
 
+    public delegate int CustomMatchQualityGetter(string text, string query);
+
+    public delegate Type CustomVarTypeGetter(string varName);
+
+    public static class TextAeraExt
+    {
+        public static string GetBehindText(this TextArea textArea, int length = 1)
+        {
+            string result;
+            try
+            {
+                result = textArea.Document.GetText(textArea.Caret.Offset, length);
+            }
+            catch
+            {
+                result = "";
+            }
+            return result;
+        }
+        public static string GetAheadText(this TextArea textArea, int length = 1)
+        {
+            string result;
+            try
+            {
+                result = textArea.Document.GetText(textArea.Caret.Offset - length, length);
+            }
+            catch
+            {
+                result = "";
+            }
+            return result;
+        }
+        public static void RemoveBehindText(this TextArea textArea, int length = 1)
+        {
+            textArea.Document.Remove(textArea.Caret.Offset, length);
+
+        }
+    }
+
     public class CustomCompletionData : ICompletionData
     {
         public int replaceOffset = 0; // 替换选中补全项时的偏移量，默认为0，当非.触发时为token的长度
@@ -1007,19 +1079,7 @@ public class Program
         public string parent = ""; // 数据的父类，比如 ToInt32() 的父类是「Convert.」
         public int priority = 0; // 当有多条数据时展示的优先级，优先级越高越靠上
         public string iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/custom.png";
-
-        public CustomCompletionData(JObject item, int offset = 0)
-        {
-            // 暂时废弃
-            //this.Text = item["name"].ToString();
-            //this.Description = item["description"].ToString();
-            //this.completeOffset = item["completeOffset"].ToObject<int>();
-            //this.replaceOffset = offset;
-        }
-        public CustomCompletionData()
-        {
-
-        }
+        public object iconControl = null;
         public System.Windows.Media.ImageSource Image
         {
             get
@@ -1074,21 +1134,6 @@ public class Program
                 return text;
             }
 
-        }
-        private ImageSource GetImage(string path)
-        {
-            string text = path;
-            BitmapImage bitmapImage = new BitmapImage();
-            bitmapImage.BeginInit();
-            bitmapImage.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-            bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-            bitmapImage.UriSource = new Uri(text);
-            bitmapImage.EndInit();
-            if (bitmapImage.CanFreeze)
-            {
-                bitmapImage.Freeze();
-            }
-            return bitmapImage;
         }
 
     }

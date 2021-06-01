@@ -29,7 +29,7 @@ namespace SimpleCodeCompletion
         public DescriptionControl()
         {
             InitializeComponent();
-            this.textBox2.SyntaxHighlighting = CodeCompletion.highlighting;
+            this.textBox2.SyntaxHighlighting = CodeCompletion.DescriptionHighlighting;
             //this.textBox2.TextArea.SetValue(TextBlock.LineHeightProperty, this.textBox2.FontSize * 1000);
         }
     }
