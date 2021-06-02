@@ -9,6 +9,7 @@ new CodeCompletion(textEditor, quickerVarInfo);
 
 ## 可配置的静态属性
 
+`CustomCompletionDataFromAPI` 定义从网络API获取补全数据的函数，该函数只会在简易补全不生效和主动触发补全的使用
 
 `PredefindTypes` 自动补全时支持的类型
 
