@@ -4,6 +4,17 @@
 ## 使用方法
 
 ```csharp
+quickerVarInfo = new JArray()
+{
+    JObject.FromObject(new {
+        Key="test",
+        Type=0,
+        Desc="",
+        DefaultValue=""
+    })
+};
+CodeCompletion.CustomCompletionDataFromAPI = new CustomCompletionDataGetterFromAPI(GetDataFromAPI);
+CodeCompletion.CustomGetMatchQualityFunc = new CustomMatchQualityGetter(PinYinMatch);
 new CodeCompletion(textEditor, quickerVarInfo);
 ```
 

@@ -33,6 +33,7 @@ namespace TextWindowCodeCompletion
                 })
             };
             CodeCompletion.CustomCompletionDataFromAPI = new CustomCompletionDataGetterFromAPI(GetDataFromAPI);
+            CodeCompletion.CustomGetMatchQualityFunc = new CustomMatchQualityGetter(PinYinMatch);
             new CodeCompletion(textEditor, quickerVarInfo);
         }
 
@@ -54,6 +55,11 @@ namespace TextWindowCodeCompletion
             {
                 return null;
             }
+        }
+
+        public static int PinYinMatch(string text, string query)
+        {
+            return 1;
         }
 
         private static async Task<IList<CustomCompletionData>> GetDataFromAPI(string textArea, int offset, char? triggerChar)
