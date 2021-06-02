@@ -17,6 +17,7 @@ using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Xml;
@@ -28,8 +29,8 @@ namespace SimpleCodeCompletion
         #region Quicker
         public static IHighlightingDefinition DescriptionHighlighting;
         static ResourceManager rm = new ResourceManager("SimpleCodeCompletion.Resource1", Assembly.GetExecutingAssembly());
-        
-        static readonly JObject quickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
+
+        public static readonly JObject quickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
         /// <summary>
         /// 自动补全时支持的类型
         /// </summary>
@@ -82,8 +83,13 @@ namespace SimpleCodeCompletion
         /// 自定义Snippet，有内置几个常用的，比如if和for结构
         /// </summary>
         public static List<CustomCompletionData> CustomSnippets = JsonConvert.DeserializeObject<List<CustomCompletionData>>(rm.GetString("Snippets"));
+        /// <summary>
+        /// 定义从网络API获取补全数据的函数，该函数只会在简易补全不生效和主动触发补全的使用
+        /// </summary>
+        public static CustomCompletionDataGetterFromAPI CustomCompletionDataFromAPI = null;
+
         public static CustomVarTypeGetter TypeGetter = null;
-        static readonly HttpClient client = new HttpClient();
+
 
         CompletionWindow completionWindow;
         JArray quickerVarInfo = new JArray();
@@ -108,7 +114,7 @@ namespace SimpleCodeCompletion
 
             textEditor.TextArea.TextEntered += TextEnteredHandler;
             textEditor.TextArea.TextEntering += TextEnteringHandler;
-            textEditor.KeyDown += KeyDownHandler;
+            textEditor.KeyDown += OnKeyDown;
             using (StringReader sr = new StringReader(CodeCompletion.rm.GetString("DescriptionHighlight")))
             using (XmlReader xmlReader = XmlReader.Create(sr))
             {
@@ -143,11 +149,16 @@ namespace SimpleCodeCompletion
             if (completionWindow != null)
                 return;
             TextArea textArea = sender as TextArea;
-            if (e.Text == ".")
+            ShowComletion(textArea, e.Text, TriggerMode.Passive);
+        }
+
+        private void ShowComletion(TextArea textArea, string triggerChar, TriggerMode triggerMode)
+        {
+            if (triggerChar == ".")
             {
-                DotComletion(textArea);
+                DotComletion(textArea, triggerMode);
             }
-            else if (e.Text == "{")
+            else if (triggerChar == "{")
             {
                 completionWindow = GetCompletionWindow(textArea);
                 IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
@@ -163,20 +174,20 @@ namespace SimpleCodeCompletion
                     completionWindow = null;
                 };
             }
-            else if (char.IsLetterOrDigit(e.Text[0]))
+            else if (char.IsLetterOrDigit(triggerChar[0]))
             {
                 if (completionWindow == null)
                 {
-                    if (char.IsLetterOrDigit(textArea.GetAheadText(2)[0]))
+                    if (triggerMode != TriggerMode.Active && char.IsLetterOrDigit(textArea.GetAheadText(2)[0]))
                         return;
-                    LetterCompletion(textArea);
+                    LetterCompletion(textArea, triggerMode);
                 }
             }
-            else if (PairChars.Any(x => x[0] == e.Text || x[1] == e.Text))
+            else if (PairChars.Any(x => x[0] == triggerChar || x[1] == triggerChar))
             {
-                if (PairChars.Any(x => x[1] == e.Text) && this.IsClosingBrackets)
+                if (PairChars.Any(x => x[1] == triggerChar) && this.IsClosingBrackets)
                 {
-                    if (textArea.GetBehindText(1) == e.Text)
+                    if (textArea.GetBehindText(1) == triggerChar)
                     {
                         //textArea.RemoveBehindText(1);
                         textArea.Document.UndoStack.Undo();
@@ -184,10 +195,10 @@ namespace SimpleCodeCompletion
                         this.IsClosingBrackets = false;
                     }
                 }
-                else if (PairChars.Any(x => x[0] == e.Text))
+                else if (PairChars.Any(x => x[0] == triggerChar))
                 {
                     //textArea.Selection.ReplaceSelectionWithText("\"");
-                    textArea.Document.Insert(textArea.Caret.Offset, PairChars.First(x => x[0] == e.Text)[1]);
+                    textArea.Document.Insert(textArea.Caret.Offset, PairChars.First(x => x[0] == triggerChar)[1]);
                     textArea.Caret.Offset -= 1;
                     this.IsClosingBrackets = true;
                 }
@@ -195,8 +206,7 @@ namespace SimpleCodeCompletion
             }
         }
 
-
-        private void LetterCompletion(TextArea textArea)
+        private void LetterCompletion(TextArea textArea, TriggerMode triggerMode)
         {
             string token = GetToken(textArea);
             if (token != "")
@@ -216,7 +226,8 @@ namespace SimpleCodeCompletion
                     GetDataFromPredefindTypes(token, data);
                     GetDataFromPredefindKeyWords(token, data);
                 }
-
+                if (triggerMode == TriggerMode.Active)
+                    GetDataFromAPI(textArea, data);
                 GetDataFromReflection(textArea, data);
                 // 补全数据不为空，则显示补全窗口
                 if (data.Count() > 0)
@@ -232,7 +243,7 @@ namespace SimpleCodeCompletion
             }
         }
 
-        private void DotComletion(TextArea textArea)
+        private void DotComletion(TextArea textArea, TriggerMode triggerMode)
         {
             var parent = GetParent(textArea);
             completionWindow = GetCompletionWindow(textArea);
@@ -240,7 +251,7 @@ namespace SimpleCodeCompletion
 
             GetDataFromSnippets(parent, "", data);
 
-            if (!GetDataFromReflection(textArea, data))
+            if (!GetDataFromReflection(textArea, data) || triggerMode == TriggerMode.Active)
             {
                 GetDataFromAPI(textArea, data);
             }
@@ -255,7 +266,7 @@ namespace SimpleCodeCompletion
             };
         }
 
-        public void KeyDownHandler(object o, KeyEventArgs e)
+        public void OnKeyDown(object o, KeyEventArgs e)
         {
             TextArea textArea = ((TextEditor)o).TextArea;
             if (e.Key == Key.Space && e.KeyboardDevice.Modifiers == ModifierKeys.Control)
@@ -265,10 +276,7 @@ namespace SimpleCodeCompletion
                 if (completionWindow == null)
                 {
                     var fchar = textArea.GetAheadText(1);
-                    if (fchar == ".")
-                        DotComletion(textArea);
-                    else if (char.IsLetterOrDigit(fchar[0]))
-                        LetterCompletion(textArea);
+                    ShowComletion(textArea, fchar, TriggerMode.Active);
                 }
             }
         }
@@ -333,140 +341,19 @@ namespace SimpleCodeCompletion
 
         private async void GetDataFromAPI(TextArea textArea, IList<ICompletionData> data)
         {
-            JObject jsonBody = JObject.Parse(@"{
-    ""CodeBlock"": """",
-    ""OriginalCodeBlock"": """",
-    ""Language"": ""CSharp"",
-    ""Compiler"": ""Net45"",
-    ""ProjectType"": ""Console"",
-    ""OriginalFiddleId"": ""O5VX2a"",
-    ""NuGetPackageVersionIds"": ""73703"",
-    ""OriginalNuGetPackageVersionIds"": ""73703"",
-    ""TimeOffset"": ""8"",
-    ""ConsoleInputLines"": [],
-    ""MvcViewEngine"": ""Razor"",
-    ""MvcCodeBlock"": {
-        ""Model"": """",
-        ""View"": """",
-        ""Controller"": """"
-    },
-    ""OriginalMvcCodeBlock"": {
-        ""Model"": """",
-        ""View"": """",
-        ""Controller"": """"
-    },
-    ""UseResultCache"": false,
-    ""FileType"": ""Console"",
-    ""Position"": 307
-}");
-            string leftWrap = @"using System;
-using System.Text.RegularExpressions;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System.IO;
-using System.Drawing;
-using System.Reflection;
-public class Program
-{
-	public static void Main()
-	{";
-            string rightWrap = @"}}";
-            string declareVar = string.Join("", quickerVarInfo.Select(x => quickerVarMetaData[x["Type"].ToString()]["type"].ToString() + " v_" + x["Key"] + ";"));
-            string originCode = textArea.TextView.Document.Text.Substring(0, textArea.Caret.Offset) + "@#$%" + textArea.TextView.Document.Text.Substring(textArea.Caret.Offset);
-            string code = ReplaceQuickerVar(originCode);
-            string handledCode = leftWrap + declareVar + code + rightWrap;
-            int positon = handledCode.IndexOf("@#$%");
-            handledCode = handledCode.Remove(positon, 4);
-            jsonBody["CodeBlock"] = handledCode;
-            jsonBody["OriginalCodeBlock"] = handledCode;
-            jsonBody["Position"] = positon;
-            HttpRequestMessage httpRequestMessage = new HttpRequestMessage(new HttpMethod("POST"), "https://dotnetfiddle.net/Home/GetAutoComplete");
-            httpRequestMessage.Content = new StringContent(jsonBody.ToString(), Encoding.UTF8, "application/json");
-            try
+            if (CustomCompletionDataFromAPI != null)
             {
-                var response = await client.SendAsync(httpRequestMessage);
-                var responseString = await response.Content.ReadAsStringAsync();
-                var Result = JArray.Parse(responseString);
-                foreach (var group in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 2).GroupBy(x => x["Name"].ToString()))
-                {
-                    var method = group.First(x => true);
-                    bool IsGeneric = (bool)method["IsGeneric"];
-                    bool IsExtension = (bool)method["IsExtension"];
-                    bool IsStatic = (bool)method["IsStatic"];
-                    string description = String.Join("\r\n", group.Select(m =>
-                    {
-                        IEnumerable<JToken> paramss = null;
-                        if (IsExtension)
-                        {
-                            paramss = m["Params"].Skip(1);
-                        }
-                        else
-                            paramss = m["Params"];
-                        return ((!IsStatic) ? "static: " : "")
-                                + m["Name"]
-                                + "("
-                                + String.Join(", ", paramss.Select(y => (((bool)y["IsParams"]) ? "params " : "") + y["Type"] + " " + y["Name"]))
-                                + "): " + m["Type"];
-                    }));
+                var allCode = textArea.Document.Text;
+                var offset = textArea.Caret.Offset;
 
-                    string genericPart = (IsGeneric ? " <>" : "");
-                    var onedata = new CustomCompletionData()
-                    {
-                        name = method["Name"] + genericPart,
-                        actualText = method["Name"] +
-                                    (IsGeneric ? "<>" : "") +
-                                    (method["Params"].Count() > 0 ? "($1" : "(") + ")",
-                        priority = 0,
-                        description = description,
-                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/method.png"
-                    };
-                    data.Add(onedata);
-
-                }
-                foreach (var prop in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 0))
+                foreach (var item in await CustomCompletionDataFromAPI(allCode, offset, null))
                 {
-                    var onedata = new CustomCompletionData()
-                    {
-                        name = prop["Name"].ToString(),
-                        actualText = prop["Name"].ToString(),
-                        priority = 1,
-                        description = prop["Name"] + ": " + prop["Type"],
-                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/field.png"
-                    };
-                    data.Add(onedata);
-                }
-                foreach (var prop in Result.OfType<JObject>().Where(x => (int)x["ItemType"] == 1))
-                {
-                    var onedata = new CustomCompletionData()
-                    {
-                        name = prop["Name"].ToString(),
-                        actualText = prop["Name"].ToString(),
-                        priority = 1,
-                        description = prop["Name"] + ": " + prop["Type"],
-                        iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/property.png"
-                    };
-                    data.Add(onedata);
+                    data.Add(item);
                 }
             }
-            catch { };
-
         }
 
-        private string ReplaceQuickerVar(string expression)
-        {
-            foreach (var keyValuePair in quickerVarInfo)
-            {
-                string text = "v_" + keyValuePair["Key"];
-                if (expression.Contains("{" + keyValuePair["Key"] + "}"))
-                {
-                    expression = expression.Replace("{" + keyValuePair["Key"] + "}", text);
-                }
-            }
-            return expression;
-        }
+
 
         private void GetDataFromQuickerVars(IList<ICompletionData> data)
         {
@@ -481,7 +368,6 @@ public class Program
                     {
                         name = varName,
                         actualText = varName + "}",
-                        replaceOffset = 0,
                         description = "介绍：" + Desc +
                                         (DefaultValue.Length < 10000 ? "\r\n" + "默认值：" + DefaultValue : ""),
                         iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/" + quickerVarMetaData[item["Type"].ToString()]["name"].ToString().ToLower() + ".png",
@@ -922,7 +808,7 @@ public class Program
             return ValueTypeHandle(friendlyName);
         }
 
-        private static string GetToken(TextArea sender)
+        public static string GetToken(TextArea sender)
         {
             // 获取光标位置前面的至多30个字符
             var po = sender.Caret.Position;
@@ -943,7 +829,7 @@ public class Program
             }
         }
 
-        private static string GetParent(TextArea sender)
+        public static string GetParent(TextArea sender)
         {
             // 获取光标位置前面的至多30个字符
             var currentCursorPosition = sender.Caret.Position;
@@ -1005,41 +891,6 @@ public class Program
             return -1;
         }
 
-        class CompletionDataComparer : IEqualityComparer<MethodInfo>
-        {
-            // Products are equal if their names and product numbers are equal.
-            public bool Equals(MethodInfo x, MethodInfo y)
-            {
-
-                //Check whether the compared objects reference the same data.
-                if (Object.ReferenceEquals(x, y)) return true;
-
-                //Check whether any of the compared objects is null.
-                if (Object.ReferenceEquals(x, null) || Object.ReferenceEquals(y, null))
-                    return false;
-
-                //Check whether the products' properties are equal.
-                return GetToken(x) == GetToken(y);
-            }
-
-            public int GetHashCode(MethodInfo product)
-            {
-                //Check whether the object is null
-                if (Object.ReferenceEquals(product, null)) return 0;
-
-                //Get hash code for the Code field.
-                int hashProductCode = GetToken(product).GetHashCode();
-
-                //Calculate the hash code for the product.
-                return hashProductCode;
-            }
-
-            private string GetToken(MethodInfo m)
-            {
-                return m.Name + String.Join("", m.GetParameters().Select(x => x.Name + x.ParameterType.Name));
-            }
-        }
-
         #endregion Quicker
     }
 
@@ -1047,6 +898,13 @@ public class Program
 
     public delegate Type CustomVarTypeGetter(string varName);
 
+    public delegate Task<IList<CustomCompletionData>> CustomCompletionDataGetterFromAPI(string allCode, int offset, char? triggerChar);
+
+    public enum TriggerMode
+    {
+        Active,
+        Passive
+    }
     public static class TextAeraExt
     {
         public static string GetBehindText(this TextArea textArea, int length = 1)
@@ -1084,19 +942,42 @@ public class Program
 
     public class CustomCompletionData : ICompletionData
     {
-        public int replaceOffset = 0; // 替换选中补全项时的偏移量，默认为0，当非.触发时为token的长度
-        public int completeOffset = 0; // 替换完成后光标的偏移量，用来将光标定位到括号内等位置
-        public string description = ""; // 数据的介绍
-        public string name; // 数据在补全窗口中的文字
-        public string actualText; // 实际替换时的文字
-        public string parent = ""; // 数据的父类，比如 ToInt32() 的父类是「Convert.」
-        public int priority = 0; // 当有多条数据时展示的优先级，优先级越高越靠上
+        /// <summary>
+        /// 替换选中补全项时的偏移量，默认为0，当非.触发时为token的长度
+        /// </summary>
+        internal int replaceOffset = -1;
+        /// <summary>
+        /// 替换完成后光标的偏移量，用来将光标定位到括号内等位置
+        /// </summary>
+        private int completeOffset = 0;
+        /// <summary>
+        /// 数据的文字介绍
+        /// </summary>
+        public string description = "";
+        /// <summary>
+        /// 数据在补全窗口中的显示的文字
+        /// </summary>
+        public string name;
+        /// <summary>
+        /// 实际用户选择后输入到屏幕上的文字
+        /// </summary>
+        public string actualText;
+        /// <summary>
+        /// 一般为空即可。数据的父类，比如 ToInt32() 的父类是「Convert.」
+        /// </summary>
+        public string parent = "";
+        /// <summary>
+        /// 当有多条数据时显示的顺序，值越大越靠上
+        /// </summary>
+        internal int priority = 100; 
         public string iconPath = $"pack://application:,,,/{Assembly.GetExecutingAssembly().GetName().Name};component/Resources/Icon/custom.png";
-        public object iconControl = null;
+        public System.Windows.Media.ImageSource iconImageSource = null;
         public System.Windows.Media.ImageSource Image
         {
             get
             {
+                if (iconImageSource != null)
+                    return iconImageSource;
                 return new BitmapImage(new Uri(iconPath));
                 //return GetImage(this.iconPath);
                 //return null; 
@@ -1123,10 +1004,16 @@ public class Program
                 //return description;
             }
         }
-        public double Priority { get { return 1.0; } }
+        public double Priority { get { return priority; } }
         public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
         {
-            if (String.IsNullOrEmpty(this.actualText))
+            if(replaceOffset == -1)
+            {
+                var token = CodeCompletion.GetToken(textArea);
+                this.replaceOffset = token.Length;
+            }
+            
+            if (String.IsNullOrEmpty(this.actualText));
                 this.actualText = this.Text;
             var replaceSegment = new SelectionSegment(completionSegment.Offset - this.replaceOffset, completionSegment.EndOffset);
             textArea.Document.Replace(replaceSegment, GetActualTextAndSetOffset(this.actualText));

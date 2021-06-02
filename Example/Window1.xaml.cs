@@ -58,6 +58,22 @@ namespace TextWindowCodeCompletion
         {
             InitializeComponent();
             Main.Init(this.textEditor11);
+            this.textEditor11.TextArea.Document.Text = @"List<string> abcd;
+ll.Select(x => x.Select(x => x))
+ll[0]
+Path
+if
+Dic
+{test}
+foreach (var item in {test})
+{
+	item
+}
+foreach (var item in new List<Bitmap>())
+{
+	item.
+}
+";
         }
 
 
