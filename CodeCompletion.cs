@@ -28,14 +28,12 @@ namespace SimpleCodeCompletion
         #region Quicker
         public static IHighlightingDefinition DescriptionHighlighting;
         static ResourceManager rm = new ResourceManager("SimpleCodeCompletion.Resource1", Assembly.GetExecutingAssembly());
-        static List<string[]> pairChars = new List<string[]>(){
-                    new string[]{"\"", "\"" },
-                    new string[]{"'", "'" },
-                    new string[]{"[", "]" },
-                    new string[]{"(", ")" },
-                };
+        
         static readonly JObject quickerVarMetaData = JObject.Parse(@"{""0"": {""name"": ""Text"",""type"": ""string""},""1"": {""name"": ""Number"",""type"": ""double""},""2"": {""name"": ""Boolean"",""type"": ""bool""},""3"": {""name"": ""Image"",""type"": ""Bitmap""},""4"": {""name"": ""List"",""type"": ""List<string>""},""6"": {""name"": ""DateTime"",""type"": ""DateTime""},""7"": ""Keyboard"",""8"": ""Mouse"",""9"": ""Enum"",""10"": {""name"": ""Dict"",""type"": ""Dictionary<string, object>""},""11"": ""Form"",""12"": {""name"": ""Integer"",""type"": ""int""},""98"": {""name"": ""Object"",""type"": ""Object""},""99"": {""name"": ""Object"",""type"": ""Object""},""100"": ""NA"",""101"": ""CreateVar""}");
-        static Type[] predefindTypes = new Type[]
+        /// <summary>
+        /// 自动补全时支持的类型
+        /// </summary>
+        public static Type[] PredefindTypes = new Type[]
         {
             typeof(List<string>),
             typeof(Dictionary<string, object>),
@@ -67,9 +65,24 @@ namespace SimpleCodeCompletion
             typeof(Type),
             typeof(Match)
         };
-        static CustomMatchQualityGetter customGetMatchQualityFunc = null;
-        static List<CustomCompletionData> CustomSnippets = JsonConvert.DeserializeObject<List<CustomCompletionData>>(rm.GetString("Snippets"));
-        static CustomVarTypeGetter TypeGetter = null;
+        /// <summary>
+        /// 对符，默认有括号、单引号、双引号
+        /// </summary>
+        public static List<string[]> PairChars = new List<string[]>(){
+                    new string[]{"\"", "\"" },
+                    new string[]{"'", "'" },
+                    new string[]{"[", "]" },
+                    new string[]{"(", ")" },
+                };
+        /// <summary>
+        /// 补全项目匹配函数输入：string text, string query, 输出：匹配度
+        /// </summary>
+        public static CustomMatchQualityGetter CustomGetMatchQualityFunc = null;
+        /// <summary>
+        /// 自定义Snippet，有内置几个常用的，比如if和for结构
+        /// </summary>
+        public static List<CustomCompletionData> CustomSnippets = JsonConvert.DeserializeObject<List<CustomCompletionData>>(rm.GetString("Snippets"));
+        public static CustomVarTypeGetter TypeGetter = null;
         static readonly HttpClient client = new HttpClient();
 
         CompletionWindow completionWindow;
@@ -78,7 +91,7 @@ namespace SimpleCodeCompletion
         private bool IsClosingBrackets;
 
         /// <summary>
-        /// 为 ICSharpCode.AvalonEdit.TextEditor 实现一个简单的C#自动补全
+        /// 为 <see cref="ICSharpCode.AvalonEdit.TextEditor"/> 实现一个简单的C#自动补全
         /// </summary>
         /// <param name="textEditor">要绑定的 TextEditor 实例</param>
         /// <param name="QuickerVarInfo">Quicker的动作变量信息转换的JArray</param>
@@ -159,9 +172,9 @@ namespace SimpleCodeCompletion
                     LetterCompletion(textArea);
                 }
             }
-            else if (pairChars.Any(x => x[0] == e.Text || x[1] == e.Text))
+            else if (PairChars.Any(x => x[0] == e.Text || x[1] == e.Text))
             {
-                if (pairChars.Any(x => x[1] == e.Text) && this.IsClosingBrackets)
+                if (PairChars.Any(x => x[1] == e.Text) && this.IsClosingBrackets)
                 {
                     if (textArea.GetBehindText(1) == e.Text)
                     {
@@ -171,10 +184,10 @@ namespace SimpleCodeCompletion
                         this.IsClosingBrackets = false;
                     }
                 }
-                else if (pairChars.Any(x => x[0] == e.Text))
+                else if (PairChars.Any(x => x[0] == e.Text))
                 {
                     //textArea.Selection.ReplaceSelectionWithText("\"");
-                    textArea.Document.Insert(textArea.Caret.Offset, pairChars.First(x => x[0] == e.Text)[1]);
+                    textArea.Document.Insert(textArea.Caret.Offset, PairChars.First(x => x[0] == e.Text)[1]);
                     textArea.Caret.Offset -= 1;
                     this.IsClosingBrackets = true;
                 }
@@ -488,7 +501,7 @@ public class Program
 
         private void GetDataFromPredefindTypes(string token, IList<ICompletionData> data)
         {
-            foreach (var item in predefindTypes.Where(x => x.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase)))
+            foreach (var item in PredefindTypes.Where(x => x.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase)))
             {
                 var name = ValueTypeHandle(item.Name);
                 var temp = new CustomCompletionData()
@@ -710,7 +723,7 @@ public class Program
                         types.Add(typeof(JsonConvert));
                         break;
                     default:
-                        var itemsFromPredefindTypes = predefindTypes.Where(x =>
+                        var itemsFromPredefindTypes = PredefindTypes.Where(x =>
                             GetGenericTypeName(x).Replace(" ", "") == typestring
                         );
                         if (itemsFromPredefindTypes.Count() > 0)
@@ -987,8 +1000,8 @@ public class Program
             if (query.All(x => text.IndexOf(x.ToString(), StringComparison.OrdinalIgnoreCase) != -1))
                 return 1;
 
-            if (customGetMatchQualityFunc != null)
-                return customGetMatchQualityFunc(text, query);
+            if (CustomGetMatchQualityFunc != null)
+                return CustomGetMatchQualityFunc(text, query);
             return -1;
         }
 
