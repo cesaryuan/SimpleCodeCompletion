@@ -2,13 +2,13 @@
 为 ICSharpCode.AvalonEdit.TextEditor 实现一个简单的C#自动补全
 
 ## 使用方法
-----------
+
 ```csharp
 new CodeCompletion(textEditor, quickerVarInfo);
 ```
 
 ## 可配置的静态属性
-----------
+
 
 `PredefindTypes` 自动补全时支持的类型
 
