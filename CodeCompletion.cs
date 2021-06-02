@@ -75,7 +75,7 @@ namespace SimpleCodeCompletion
                     new string[]{"(", ")" },
                 };
         /// <summary>
-        /// 补全项目匹配函数输入：string text, string query, 输出：匹配度
+        /// 补全项目匹配函数。输入：string text, string query, 输出：匹配度
         /// </summary>
         public static CustomMatchQualityGetter CustomGetMatchQualityFunc = null;
         /// <summary>
